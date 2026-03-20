@@ -1,0 +1,3510 @@
+{
+  "address": "G4r1hQssG9bVpJHA5Fot25gYcNDWnq8yk8vgjApxpu8V",
+  "metadata": {
+    "name": "polldotsol",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "buy_tokens",
+      "discriminator": [
+        189,
+        21,
+        230,
+        133,
+        247,
+        2,
+        110,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "docs": [
+            "User ka wallet — buyer. SOL iske wallet se deduct hoga."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — price, fee, mint info stored hai yaha."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint — kis token ke tokens buy karne hain."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury ka token account — yaha se tokens user ko transfer honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "buyer_token_account",
+          "docs": [
+            "User ka token account — yaha pe bought tokens aayenge.",
+            "`init_if_needed` = agar user ka pehla purchase hai toh account create hoga."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "SOL Vault — user ka SOL yaha jaayega."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program — SOL transfer ke liye."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program — token transfer ke liye."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "Associated Token Program — ATA create karne ke liye (init_if_needed)."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cast_vote",
+      "discriminator": [
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "docs": [
+            "Voter ka wallet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — vote_cost ke liye."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "Proposal — jis pe vote karna hai."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vote_record",
+          "docs": [
+            "Vote Record — duplicate voting rokne ke liye.",
+            "Seeds: [\"vote_record\", proposal.key(), voter.key()]",
+            "Agar yeh account pehle se exist kare → matlab user already vote kar chuka hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter_token_account",
+          "docs": [
+            "Voter ka token account — yaha se tokens deduct honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "voting_escrow",
+          "docs": [
+            "Voting Escrow — yaha pe vote tokens lock honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "option_index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_proposal",
+      "discriminator": [
+        132,
+        116,
+        68,
+        174,
+        216,
+        160,
+        198,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Proposal creator ka wallet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — proposal_cost, vote_cost, mint info ke liye."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal_counter",
+          "docs": [
+            "Proposal Counter — next proposal ID generate karne ke liye.",
+            "`init_if_needed` = pehla proposal ho toh counter bhi create hoga."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "Proposal Account — naya proposal data yaha store hoga.",
+            "Seeds: [\"proposal\", treasury, proposal_id]",
+            "proposal_id = counter.count (current count, jo abhi increment hoga)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "proposal_counter.count",
+                "account": "ProposalCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal_escrow",
+          "docs": [
+            "Proposal Escrow Token Account — proposal_cost tokens yaha lock honge.",
+            "Seeds: [\"proposal_escrow\", proposal.key()]",
+            "Yeh ek PDA-owned token account hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voting_escrow",
+          "docs": [
+            "Voting Escrow Token Account — vote tokens yaha lock honge.",
+            "Seeds: [\"voting_escrow\", proposal.key()]"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_token_account",
+          "docs": [
+            "Creator ka token account — yaha se tokens deduct honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "Associated Token Program."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "options",
+          "type": {
+            "vec": "string"
+          }
+        },
+        {
+          "name": "deadline",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_token",
+      "discriminator": [
+        84,
+        52,
+        204,
+        228,
+        24,
+        140,
+        234,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — yeh sign karega aur rent pay karega.",
+            "`mut` kyunki SOL deduct hoga (account creation rent ke liye)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Naya token mint account — PDA se derive hota hai.",
+            "Seeds: [\"mint\", admin.key()] — har admin ka ek unique mint hoga.",
+            "",
+            "`init` = naya account create karega",
+            "`payer = admin` = admin rent pay karega",
+            "`mint::decimals = 6` = 6 decimal places (1 token = 1,000,000 smallest units)",
+            "`mint::authority = treasury` = treasury hi tokens mint kar sakti hai"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury state account — platform ki sari configuration yaha store hoti hai.",
+            "Pehli baar create hota hai (init_if_needed) — agar already exist kare toh",
+            "reuse hota hai.",
+            "",
+            "Seeds: [\"treasury\", admin.key()] — har admin ki ek unique treasury.",
+            "space = 8 + Treasury::INIT_SPACE",
+            "8 bytes = discriminator (Anchor har account me add karta hai)",
+            "INIT_SPACE = #[derive(InitSpace)] macro se auto-calculate hota hai"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program — naye accounts create karne ke liye zaroori hai.",
+            "Solana me har account create karne ke liye system program call hota hai."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "SPL Token Program — mint operations ke liye zaroori hai.",
+            "Yeh Solana ka official token program hai jo sare SPL token",
+            "operations handle karta hai."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "rent",
+          "docs": [
+            "Rent sysvar — account ko rent exempt banana ke liye check hota hai.",
+            "Solana me har account ko minimum balance rakhna padta hai",
+            "taaki woh delete na ho."
+          ],
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "_decimals",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "finalize_proposal",
+      "discriminator": [
+        23,
+        68,
+        51,
+        167,
+        109,
+        173,
+        187,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Creator ka wallet — sirf creator finalize kar sakta hai."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "Proposal — finalize hone wala proposal."
+          ],
+          "writable": true
+        },
+        {
+          "name": "proposal_escrow",
+          "docs": [
+            "Proposal Escrow — isme locked tokens treasury ko ja rahe hain."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voting_escrow",
+          "docs": [
+            "Voting Escrow — isme locked tokens creator ko ja rahe hain."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury ka token account — proposal escrow ke tokens yaha jayenge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "creator_token_account",
+          "docs": [
+            "Creator ka token account — voting escrow ke tokens yaha jayenge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "Associated Token Program."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_treasury",
+      "discriminator": [
+        124,
+        186,
+        211,
+        195,
+        85,
+        165,
+        129,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — signer + payer."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "treasury"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury state account — pehle se exist karna chahiye (CreateToken me bana tha).",
+            "`has_one = admin` = check karta hai ki treasury.admin == admin.key()",
+            "Matlab sirf original admin hi treasury initialize kar sakta hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint — pehle se exist karna chahiye (CreateToken me bana tha).",
+            "Yeh verify karta hai ki sahi mint use ho raha hai."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury ka Token Account — yaha pe sare tokens store honge.",
+            "`init` = naya create hoga",
+            "`associated_token::mint = mint` = is mint ke tokens store karega",
+            "`associated_token::authority = treasury` = treasury own karega",
+            "",
+            "Associated Token Account (ATA) Solana ka standard hai — har wallet",
+            "ke liye har token ka ek deterministic address hota hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "SOL Vault — ek PDA jo SOL store karta hai.",
+            "Jab users tokens buy karte hain → SOL yaha aata hai.",
+            "Jab users tokens redeem karte hain → SOL yaha se jaata hai.",
+            "",
+            "`seeds = [\"vault\", treasury.key()]` — treasury se linked hai.",
+            "`init` = pehli baar create ho raha hai.",
+            "`space = 0` = koi data store nahi karta, sirf SOL hold karta hai.",
+            "",
+            "NOTE: \"space = 0\" means sirf 8 bytes discriminator ke liye nahi hai,",
+            "SystemAccount hai toh koi data nahi — sirf lamports hold karta hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program — account creation ke liye."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program — token account operations ke liye."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "Associated Token Program — ATA create karne ke liye."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mint_tokens",
+      "discriminator": [
+        59,
+        132,
+        24,
+        246,
+        122,
+        39,
+        8,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — signer."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "treasury"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — mint authority confirm karne ke liye + has_one check."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint — jis token ke tokens mint karne hain.",
+            "`mut` kyunki mint ke baad supply badhegi."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury ka token account — mint ke tokens yaha jayenge.",
+            "treasry_token_account → treasury ki authority ke andar."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program — mint_to CPI ke liye."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "redeem_tokens",
+      "discriminator": [
+        246,
+        98,
+        134,
+        41,
+        152,
+        33,
+        120,
+        69
+      ],
+      "accounts": [
+        {
+          "name": "redeemer",
+          "docs": [
+            "User ka wallet — redeemer."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "redeemer_token_account",
+          "docs": [
+            "User ka token account — yaha se tokens deduct honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "redeemer"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury ka token account — tokens yaha deposit honge."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "SOL Vault — yaha se SOL user ko jaayega."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program — SOL transfer ke liye."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program — token transfer ke liye."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_token_metadata",
+      "discriminator": [
+        218,
+        126,
+        122,
+        193,
+        220,
+        149,
+        103,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — signer + payer (metadata account ka rent pay karega)."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "treasury"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — mint authority ke roop me sign karega (PDA signer).",
+            "Treasury is mint ki authority hai, toh metadata set karne ke liye",
+            "treasury ka signature chahiye."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token Mint — jis token ka metadata set karna hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "metadata_account",
+          "docs": [
+            "Metadata Account — Metaplex ka standard metadata account.",
+            "Yeh UncheckedAccount hai kyunki Metaplex program isse validate karega.",
+            "Seeds by Metaplex: [\"metadata\", token_metadata_program_id, mint_key]",
+            "",
+            "We cannot use a typed account here because it's created by an external program."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program — CPI (Cross Program Invocation) ke liye."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token Program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_metadata_program",
+          "docs": [
+            "Metaplex Token Metadata Program — metadata create karne ke liye."
+          ],
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "rent",
+          "docs": [
+            "Rent sysvar"
+          ],
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_platform_settings",
+      "discriminator": [
+        213,
+        238,
+        2,
+        39,
+        128,
+        157,
+        3,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — signer."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "treasury"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — settings yahi store hoti hain.",
+            "`has_one = admin` = confirm karta hai ki sahi admin hai."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "token_price",
+          "type": "u64"
+        },
+        {
+          "name": "proposal_cost",
+          "type": "u64"
+        },
+        {
+          "name": "vote_cost",
+          "type": "u64"
+        },
+        {
+          "name": "fee_basis_points",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_fees",
+      "discriminator": [
+        198,
+        212,
+        171,
+        109,
+        144,
+        215,
+        174,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Admin ka wallet — jaha SOL jaayega."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "treasury"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — admin verify karne ke liye."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "admin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "SOL Vault — yaha se SOL nikala jaayega."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System Program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Proposal",
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ]
+    },
+    {
+      "name": "ProposalCounter",
+      "discriminator": [
+        110,
+        92,
+        147,
+        182,
+        142,
+        28,
+        182,
+        5
+      ]
+    },
+    {
+      "name": "Treasury",
+      "discriminator": [
+        238,
+        239,
+        123,
+        238,
+        89,
+        1,
+        168,
+        253
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "FeesWithdrawn",
+      "discriminator": [
+        234,
+        15,
+        0,
+        119,
+        148,
+        241,
+        40,
+        21
+      ]
+    },
+    {
+      "name": "MetadataSet",
+      "discriminator": [
+        190,
+        125,
+        71,
+        119,
+        14,
+        31,
+        26,
+        197
+      ]
+    },
+    {
+      "name": "PlatformSettingsUpdated",
+      "discriminator": [
+        63,
+        43,
+        68,
+        50,
+        156,
+        44,
+        235,
+        81
+      ]
+    },
+    {
+      "name": "ProposalCreated",
+      "discriminator": [
+        186,
+        8,
+        160,
+        108,
+        81,
+        13,
+        51,
+        206
+      ]
+    },
+    {
+      "name": "ProposalFinalized",
+      "discriminator": [
+        159,
+        104,
+        210,
+        220,
+        86,
+        209,
+        61,
+        51
+      ]
+    },
+    {
+      "name": "TokenCreated",
+      "discriminator": [
+        236,
+        19,
+        41,
+        255,
+        130,
+        78,
+        147,
+        172
+      ]
+    },
+    {
+      "name": "TokensMinted",
+      "discriminator": [
+        207,
+        212,
+        128,
+        194,
+        175,
+        54,
+        64,
+        24
+      ]
+    },
+    {
+      "name": "TokensPurchased",
+      "discriminator": [
+        214,
+        119,
+        105,
+        186,
+        114,
+        205,
+        228,
+        181
+      ]
+    },
+    {
+      "name": "TokensRedeemed",
+      "discriminator": [
+        45,
+        78,
+        148,
+        246,
+        116,
+        201,
+        3,
+        13
+      ]
+    },
+    {
+      "name": "TreasuryInitialized",
+      "discriminator": [
+        199,
+        73,
+        174,
+        205,
+        59,
+        145,
+        55,
+        179
+      ]
+    },
+    {
+      "name": "VoteCast",
+      "discriminator": [
+        39,
+        53,
+        195,
+        104,
+        188,
+        17,
+        225,
+        213
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "TreasuryAlreadyInitialized",
+      "msg": "Treasury has already been initialized"
+    },
+    {
+      "code": 6001,
+      "name": "TreasuryNotInitialized",
+      "msg": "Treasury has not been initialized yet"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTokenPrice",
+      "msg": "Token price must be greater than zero"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidMintAmount",
+      "msg": "Mint amount must be greater than zero"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidBuyAmount",
+      "msg": "Buy amount must be greater than zero"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidRedeemAmount",
+      "msg": "Redeem amount must be greater than zero"
+    },
+    {
+      "code": 6006,
+      "name": "InsufficientSolBalance",
+      "msg": "Insufficient SOL balance to complete the transaction"
+    },
+    {
+      "code": 6007,
+      "name": "InsufficientVaultBalance",
+      "msg": "Insufficient SOL in the vault for redemption"
+    },
+    {
+      "code": 6008,
+      "name": "InsufficientTokenBalance",
+      "msg": "Insufficient token balance"
+    },
+    {
+      "code": 6009,
+      "name": "TooFewOptions",
+      "msg": "Proposal must have at least 2 options"
+    },
+    {
+      "code": 6010,
+      "name": "TooManyOptions",
+      "msg": "Proposal can have at most 10 options"
+    },
+    {
+      "code": 6011,
+      "name": "EmptyQuestion",
+      "msg": "Proposal question cannot be empty"
+    },
+    {
+      "code": 6012,
+      "name": "QuestionTooLong",
+      "msg": "Proposal question is too long (max 200 chars)"
+    },
+    {
+      "code": 6013,
+      "name": "EmptyOption",
+      "msg": "Option text cannot be empty"
+    },
+    {
+      "code": 6014,
+      "name": "OptionTooLong",
+      "msg": "Option text is too long (max 50 chars)"
+    },
+    {
+      "code": 6015,
+      "name": "DeadlineMustBeInFuture",
+      "msg": "Deadline must be in the future"
+    },
+    {
+      "code": 6016,
+      "name": "NotEnoughTokensForProposal",
+      "msg": "Not enough tokens to create a proposal"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidOptionIndex",
+      "msg": "Invalid option index for voting"
+    },
+    {
+      "code": 6018,
+      "name": "ProposalExpired",
+      "msg": "Proposal voting period has ended"
+    },
+    {
+      "code": 6019,
+      "name": "AlreadyVoted",
+      "msg": "You have already voted on this proposal"
+    },
+    {
+      "code": 6020,
+      "name": "NotEnoughTokensForVote",
+      "msg": "Not enough tokens to vote"
+    },
+    {
+      "code": 6021,
+      "name": "ProposalAlreadyFinalized",
+      "msg": "Proposal has already been finalized"
+    },
+    {
+      "code": 6022,
+      "name": "UnauthorizedFinalizer",
+      "msg": "Only the proposal creator can finalize"
+    },
+    {
+      "code": 6023,
+      "name": "ProposalNotExpired",
+      "msg": "Proposal deadline has not passed yet"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidFeePercentage",
+      "msg": "Fee percentage must be between 0 and 10000 (basis points)"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidProposalCost",
+      "msg": "Proposal cost must be greater than zero"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidVoteCost",
+      "msg": "Vote cost must be greater than zero"
+    },
+    {
+      "code": 6027,
+      "name": "EmptyTokenName",
+      "msg": "Token name cannot be empty"
+    },
+    {
+      "code": 6028,
+      "name": "EmptyTokenSymbol",
+      "msg": "Token symbol cannot be empty"
+    },
+    {
+      "code": 6029,
+      "name": "EmptyTokenUri",
+      "msg": "Token URI cannot be empty"
+    },
+    {
+      "code": 6030,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow occurred"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidWithdrawAmount",
+      "msg": "Withdraw amount must be greater than zero"
+    }
+  ],
+  "types": [
+    {
+      "name": "FeesWithdrawn",
+      "docs": [
+        "Jab admin platform ke fees (SOL) vault se apne wallet me withdraw karta hai.",
+        "",
+        "Example: Admin ne 1.5 SOL withdraw kiye",
+        "→ FeesWithdrawn { admin: \"ADMIN...\", amount: 1_500_000_000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin ka wallet address (jisne withdraw kiya)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Kitne lamports withdraw hue"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MetadataSet",
+      "docs": [
+        "Jab admin token ka metadata (name, symbol, uri) set karta hai.",
+        "",
+        "Example: Admin ne token ka name \"PollToken\", symbol \"POLL\" set kiya",
+        "→ MetadataSet { mint: \"ABC...\", name: \"PollToken\", symbol: \"POLL\" }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "Token mint ka address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Token ka name (e.g., \"PollToken\")"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "docs": [
+              "Token ka symbol (e.g., \"POLL\")"
+            ],
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformSettingsUpdated",
+      "docs": [
+        "Jab admin platform settings update karta hai (price, costs, fee).",
+        "",
+        "Example: Price=0.1 SOL, proposal=10 tokens, vote=1 token, fee=10%",
+        "→ PlatformSettingsUpdated { token_price: 100_000_000, proposal_cost: 10_000_000,",
+        "vote_cost: 1_000_000, fee_basis_points: 1000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_price",
+            "docs": [
+              "1 token ka price lamports me (1 SOL = 1_000_000_000 lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "proposal_cost",
+            "docs": [
+              "Proposal create karne ke liye kitne tokens chahiye (smallest unit me)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "vote_cost",
+            "docs": [
+              "Vote karne ke liye kitne tokens chahiye (smallest unit me)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_basis_points",
+            "docs": [
+              "Platform fee basis points me (1000 = 10%, 500 = 5%, 10000 = 100%)"
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "docs": [
+              "Proposal creator ka wallet address.",
+              "Sirf creator hi proposal ko finalize kar sakta hai.",
+              "Finalize ke baad voting escrow ke tokens creator ko milte hain."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "docs": [
+              "Proposal ka question — yeh woh sawaal hai jis pe log vote karte hain.",
+              "Example: \"Best blockchain?\" ya \"Solana ya Ethereum?\"",
+              "Max 200 characters allowed hai.",
+              "",
+              "#[max_len(200)] → InitSpace ko batata hai ki String max 200 bytes ho sakti hai.",
+              "Anchor automatically 4 bytes length prefix + 200 bytes content = 204 bytes allocate karega."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "options",
+            "docs": [
+              "Voting options ki list — yeh woh choices hain jinme se user ek choose karta hai.",
+              "Example: [\"Solana\", \"Ethereum\", \"Polygon\"]",
+              "Min 2, Max 10 options allowed.",
+              "",
+              "#[max_len(10, 50)] → Vec me max 10 items, har item max 50 bytes.",
+              "Anchor calculate karega: 4 (vec length) + 10 * (4 + 50) = 544 bytes"
+            ],
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "vote_counts",
+            "docs": [
+              "Har option pe kitne votes aaye — index options ke index se match karta hai.",
+              "Example: agar options = [\"Solana\", \"Ethereum\"] aur vote_counts = [5, 3]",
+              "toh Solana ko 5 votes mile aur Ethereum ko 3.",
+              "",
+              "#[max_len(10)] → max 10 u64 values (har option ke liye ek).",
+              "Anchor: 4 (vec length) + 10 * 8 = 84 bytes"
+            ],
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "total_votes",
+            "docs": [
+              "Total number of votes casted on this proposal.",
+              "Yeh voting escrow me locked tokens ka indicator bhi hai."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Proposal ki deadline — Unix timestamp (seconds me).",
+              "Iske baad vote nahi kar sakte, sirf finalize kar sakte hain.",
+              "Example: current_time + 86400 (24 hours baad)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "is_finalized",
+            "docs": [
+              "Kya proposal finalize ho chuka hai ya nahi.",
+              "Finalize ke baad na vote ho sakta hai na dubara finalize."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "proposal_escrow",
+            "docs": [
+              "Proposal Escrow Token Account ka address.",
+              "Jab proposal create hota hai, proposal_cost tokens yaha lock hote hain.",
+              "Finalize ke baad yeh tokens treasury me wapas jaate hain."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "voting_escrow",
+            "docs": [
+              "Voting Escrow Token Account ka address.",
+              "Jab koi user vote karta hai, vote_cost tokens yaha lock hote hain.",
+              "Finalize ke baad yeh tokens creator ko milte hain."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal_escrow_bump",
+            "docs": [
+              "Proposal escrow PDA ka bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "voting_escrow_bump",
+            "docs": [
+              "Voting escrow PDA ka bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "proposal_id",
+            "docs": [
+              "Unique proposal ID — har proposal ka alag ID hota hai.",
+              "Yeh PDA derive karne ke liye use hota hai."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "docs": [
+              "Ab tak kitne proposals bane hain. Naye proposal ka ID = count + 1.",
+              "Example: agar count = 5, toh next proposal ka ID = 6."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCreated",
+      "docs": [
+        "Jab user naya proposal create karta hai — tokens escrow me jaate hain.",
+        "",
+        "Example: U1 ne \"Best blockchain?\" proposal banaya, 10 tokens escrow me gaye",
+        "→ ProposalCreated { proposal: \"PROP...\", creator: \"U1...\",",
+        "question: \"Best blockchain?\", deadline: 1234567890,",
+        "escrow_amount: 10_000_000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "docs": [
+              "Proposal account ka address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Proposal creator ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "docs": [
+              "Proposal ka question"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Deadline — Unix timestamp (seconds me)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "escrow_amount",
+            "docs": [
+              "Kitne tokens escrow me gaye"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalFinalized",
+      "docs": [
+        "Jab proposal finalize hota hai — escrow release hota hai.",
+        "Proposal escrow → treasury, Voting escrow → creator",
+        "",
+        "Example: Proposal finalized. 10 tokens treasury me gaye, 2 tokens creator ko mile.",
+        "→ ProposalFinalized { proposal: \"PROP...\", creator: \"U1...\",",
+        "proposal_escrow_returned: 10_000_000,",
+        "voting_escrow_to_creator: 2_000_000,",
+        "total_votes: 2 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "docs": [
+              "Finalized proposal ka address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Proposal creator — jisko voting escrow ke tokens milenge"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal_escrow_returned",
+            "docs": [
+              "Kitne tokens proposal escrow se treasury me gaye"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "voting_escrow_to_creator",
+            "docs": [
+              "Kitne tokens voting escrow se creator ko mile"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_votes",
+            "docs": [
+              "Total kitne votes aaye the proposal pe"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenCreated",
+      "docs": [
+        "Jab admin naya SPL token mint create karta hai tab yeh event emit hota hai.",
+        "Frontend isse use karke token mint address display kar sakta hai.",
+        "",
+        "Example: Admin ne 6 decimals wala token create kiya",
+        "→ TokenCreated { mint: \"ABC...\", decimals: 6 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "Naye token mint ka public key address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Token ke decimals (e.g., 6 means 1 token = 1_000_000 smallest units)"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensMinted",
+      "docs": [
+        "Jab admin treasury account me tokens mint karta hai tab yeh emit hota hai.",
+        "",
+        "Example: Admin ne 1000 tokens mint kiye",
+        "→ TokensMinted { mint: \"ABC...\", amount: 1_000_000_000, destination: \"TREASURY...\" }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "Kis token mint ke tokens mint hue"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Kitne tokens mint hue (smallest unit me, decimals ke saath)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "docs": [
+              "Kis account me tokens gaye (usually treasury token account)"
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensPurchased",
+      "docs": [
+        "Jab user tokens buy karta hai SOL de kar.",
+        "",
+        "Example: U1 ne 10 tokens kharide, 1 SOL cost + 0.1 SOL fee",
+        "→ TokensPurchased { buyer: \"U1...\", amount: 10_000_000,",
+        "sol_cost: 1_000_000_000, fee: 100_000_000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "docs": [
+              "Buyer ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Kitne tokens buy kiye (smallest unit me)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sol_cost",
+            "docs": [
+              "SOL cost (excluding fee) lamports me"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Platform fee lamports me"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensRedeemed",
+      "docs": [
+        "Jab user tokens redeem karta hai SOL wapas lene ke liye.",
+        "",
+        "Example: U1 ne 10 tokens redeem kiye, 1 SOL mila minus 0.1 SOL fee",
+        "→ TokensRedeemed { redeemer: \"U1...\", amount: 10_000_000,",
+        "sol_received: 900_000_000, fee: 100_000_000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redeemer",
+            "docs": [
+              "Redeemer ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Kitne tokens redeem kiye (smallest unit me)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sol_received",
+            "docs": [
+              "Kitne SOL mila (fee minus karke) lamports me"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Platform fee lamports me"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Treasury",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin ka wallet address — sirf yeh admin operations perform kar sakta hai.",
+              "Jaise token create, mint, settings update, treasury initialize, etc."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "SPL Token Mint ka address — yeh woh token hai jo puri platform pe use hota hai.",
+              "Admin isse create karta hai (e.g., POLL token)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_token_account",
+            "docs": [
+              "Treasury ka token account — yaha pe tokens store hote hain.",
+              "Jab admin mint karta hai → tokens yaha aate hain.",
+              "Jab user buy karta hai → tokens yaha se jaate hain.",
+              "Jab user redeem karta hai → tokens yaha wapas aate hain."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_bump",
+            "docs": [
+              "SOL Vault PDA ka bump seed — PDA derive karne ke liye use hota hai.",
+              "PDA = Program Derived Address, ek special address jo program own karta hai.",
+              "Bump stored karte hain taaki har baar recalculate na karna pade."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_price",
+            "docs": [
+              "1 token ka price lamports me (1 SOL = 1,000,000,000 lamports).",
+              "Example: agar price = 100,000,000 toh 1 token = 0.1 SOL",
+              "Yeh admin set karta hai platform settings me."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "proposal_cost",
+            "docs": [
+              "Proposal create karne ke liye kitne tokens chahiye (smallest unit me).",
+              "Example: agar proposal_cost = 10,000,000 aur decimals = 6",
+              "toh 10 tokens chahiye proposal banane ke liye.",
+              "Yeh tokens proposal escrow me lock ho jaate hain."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "vote_cost",
+            "docs": [
+              "Vote karne ke liye kitne tokens chahiye (smallest unit me).",
+              "Example: agar vote_cost = 1,000,000 aur decimals = 6",
+              "toh 1 token chahiye vote karne ke liye.",
+              "Yeh tokens voting escrow me lock ho jaate hain."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_basis_points",
+            "docs": [
+              "Platform fee basis points me.",
+              "1 basis point = 0.01%, so:",
+              "- 100 = 1%",
+              "- 500 = 5%",
+              "- 1000 = 10%",
+              "- 10000 = 100%",
+              "Yeh fee token buy aur redeem dono pe lagti hai."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_initialized",
+            "docs": [
+              "Kya treasury initialize hui hai ya nahi.",
+              "Pehli baar initialize ke baad yeh true ho jaata hai.",
+              "Dubara initialize karne se rokne ke liye use hota hai."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryInitialized",
+      "docs": [
+        "Jab admin treasury ko initialize karta hai — treasury token account",
+        "aur SOL vault dono banate hain.",
+        "",
+        "Example: Admin ne treasury initialize ki",
+        "→ TreasuryInitialized { treasury: \"TRES...\", vault: \"VAULT...\", token_account: \"TA...\" }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury state account ka address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "SOL vault PDA ka address — yaha SOL store hota hai"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token_account",
+            "docs": [
+              "Treasury ka token account — yaha tokens store hote hain"
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteCast",
+      "docs": [
+        "Jab user kisi proposal pe vote karta hai — tokens voting escrow me jaate hain.",
+        "",
+        "Example: U2 ne \"Solana\" pe vote kiya, 1 token escrow me gaya",
+        "→ VoteCast { proposal: \"PROP...\", voter: \"U2...\",",
+        "option_index: 0, token_cost: 1_000_000 }"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "docs": [
+              "Kis proposal pe vote hua"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "docs": [
+              "Voter ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "option_index",
+            "docs": [
+              "Kis option pe vote diya (0-indexed)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_cost",
+            "docs": [
+              "Vote ke liye kitne tokens liye gaye (smallest unit me)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "voter",
+            "docs": [
+              "Voter ka wallet address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal",
+            "docs": [
+              "Kis proposal pe vote kiya."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "option_index",
+            "docs": [
+              "Kis option pe vote diya (0-indexed).",
+              "Example: agar options = [\"Solana\", \"Ethereum\"] aur option_index = 0",
+              "toh voter ne Solana pe vote kiya."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
