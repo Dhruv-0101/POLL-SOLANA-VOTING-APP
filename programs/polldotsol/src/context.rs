@@ -28,6 +28,7 @@ use anchor_spl::{
 
 // Apne program ke state structs import karte hain
 use crate::state::*;
+use crate::errors::PollError;
 
 // ============================================================================
 // 1. CREATE TOKEN CONTEXT
@@ -667,4 +668,128 @@ pub struct WithdrawFees<'info> {
 
     /// System Program.
     pub system_program: Program<'info, System>,
+}
+// ============================================================================
+// 10. CREATE GAME POOL CONTEXT (Flip a Coin)
+// ============================================================================
+// User naya game pool create karta hai Head ya Tail choose karke.
+// entry_fee tokens escrow me lock ho jaate hain.
+// ============================================================================
+#[derive(Accounts)]
+pub struct CreateGamePool<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"treasury", treasury.admin.as_ref()],
+        bump,
+    )]
+    pub treasury: Account<'info, Treasury>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        init_if_needed,
+        payer = creator,
+        seeds = [b"game_counter", treasury.key().as_ref()],
+        bump,
+        space = 8 + GameCounter::INIT_SPACE,
+    )]
+    pub game_counter: Account<'info, GameCounter>,
+
+    #[account(
+        init,
+        payer = creator,
+        seeds = [
+            b"game_pool", 
+            treasury.key().as_ref(), 
+            game_counter.count.to_le_bytes().as_ref()
+        ],
+        bump,
+        space = 8 + GamePool::INIT_SPACE,
+    )]
+    pub game_pool: Account<'info, GamePool>,
+
+    #[account(
+        init,
+        payer = creator,
+        seeds = [b"game_escrow", game_pool.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = game_pool,
+    )]
+    pub game_escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = creator,
+    )]
+    pub creator_token_account: Account<'info, TokenAccount>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+// ============================================================================
+// 11. JOIN GAME POOL CONTEXT (Flip a Coin)
+// ============================================================================
+// Doosra user game join karta hai and result resolve hota hai.
+// Winner ko pool ka saara amount milta hai (minus admin fee).
+// ============================================================================
+#[derive(Accounts)]
+pub struct JoinGamePool<'info> {
+    #[account(mut)]
+    pub joiner: Signer<'info>,
+
+    /// CHECK: Pool creator ka wallet (Winner reward receive karne ke liye)
+    #[account(mut)]
+    pub creator: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"treasury", treasury.admin.as_ref()],
+        bump,
+    )]
+    pub treasury: Account<'info, Treasury>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"game_pool", 
+            treasury.key().as_ref(), 
+            game_pool.pool_id.to_le_bytes().as_ref()
+        ],
+        bump = game_pool.bump,
+        constraint = game_pool.status == 0 @ PollError::ProposalAlreadyFinalized, // Reuse error for simplicity
+    )]
+    pub game_pool: Account<'info, GamePool>,
+
+    #[account(
+        mut,
+        seeds = [b"game_escrow", game_pool.key().as_ref()],
+        bump,
+    )]
+    pub game_escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = joiner,
+    )]
+    pub joiner_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = creator,
+    )]
+    pub creator_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }

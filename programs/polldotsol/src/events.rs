@@ -228,3 +228,36 @@ pub struct FeesWithdrawn {
     /// Kitne lamports withdraw hue
     pub amount: u64,
 }
+// ============================================================================
+// GAME RELATED EVENTS (Flip a Coin)
+// ============================================================================
+
+/// Jab koi user naya game pool create karta hai.
+#[event]
+pub struct GamePoolCreated {
+    /// Unique game ID
+    pub pool_id: u64,
+    /// Game banane wale ka address
+    pub creator: Pubkey,
+    /// Kitne tokens stake kiye (bet amount)
+    pub amount: u64,
+    /// Creator ne kya choose kiya (0: Head, 1: Tail)
+    pub choice: u8,
+}
+
+/// Jab doosra user game join karta hai aur result resolve ho jata hai.
+#[event]
+pub struct GameResolved {
+    /// Kis game pool ka result hai
+    pub pool_id: u64,
+    /// Winner ka wallet address
+    pub winner: Pubkey,
+    /// Loser ka wallet address
+    pub loser: Pubkey,
+    /// Coin flip ka result (0: Head, 1: Tail)
+    pub result: u8,
+    /// Total tokens jo distribution ke liye available the (Amount * 2)
+    pub total_pool: u64,
+    /// Admin ko kitni fee gayi (Treasury fee)
+    pub fee: u64,
+}

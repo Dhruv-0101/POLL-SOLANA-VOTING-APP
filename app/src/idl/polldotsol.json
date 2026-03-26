@@ -1,5 +1,5 @@
 {
-  "address": "ELNrAWpfSxjsKvshh2DqMdQrCSW96QnDsQBu8222HEGo",
+  "address": "GuEoAC4UQV37E7fuogaSUpxfVGebb1xerv64Zj9Cbg1o",
   "metadata": {
     "name": "polldotsol",
     "version": "0.1.0",
@@ -588,6 +588,258 @@
       "args": [
         {
           "name": "option_index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_game_pool",
+      "discriminator": [
+        25,
+        45,
+        119,
+        68,
+        30,
+        167,
+        78,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "game_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "game_counter.count",
+                "account": "GameCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game_pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "choice",
           "type": "u8"
         }
       ]
@@ -1654,6 +1906,307 @@
       ]
     },
     {
+      "name": "join_game_pool",
+      "discriminator": [
+        238,
+        201,
+        114,
+        61,
+        234,
+        240,
+        237,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "joiner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury.admin",
+                "account": "Treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "game_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "game_pool.pool_id",
+                "account": "GamePool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game_pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "joiner_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "joiner"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "creator_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "mint_tokens",
       "discriminator": [
         59,
@@ -2450,6 +3003,32 @@
   ],
   "accounts": [
     {
+      "name": "GameCounter",
+      "discriminator": [
+        117,
+        67,
+        148,
+        185,
+        138,
+        194,
+        249,
+        87
+      ]
+    },
+    {
+      "name": "GamePool",
+      "discriminator": [
+        206,
+        33,
+        215,
+        16,
+        75,
+        113,
+        78,
+        214
+      ]
+    },
+    {
       "name": "Proposal",
       "discriminator": [
         26,
@@ -2514,6 +3093,32 @@
         241,
         40,
         21
+      ]
+    },
+    {
+      "name": "GamePoolCreated",
+      "discriminator": [
+        143,
+        151,
+        124,
+        184,
+        146,
+        211,
+        85,
+        240
+      ]
+    },
+    {
+      "name": "GameResolved",
+      "discriminator": [
+        145,
+        78,
+        127,
+        55,
+        138,
+        225,
+        142,
+        124
       ]
     },
     {
@@ -2812,6 +3417,21 @@
       "code": 6032,
       "name": "SlippageExceeded",
       "msg": "Slippage tolerance exceeded"
+    },
+    {
+      "code": 6033,
+      "name": "InvalidGameChoice",
+      "msg": "Choice must be 0 (Head) or 1 (Tail)"
+    },
+    {
+      "code": 6034,
+      "name": "GamePoolFull",
+      "msg": "Game pool is already full"
+    },
+    {
+      "code": 6035,
+      "name": "InvalidBetAmount",
+      "msg": "Bet amount must be greater than zero"
     }
   ],
   "types": [
@@ -2837,6 +3457,190 @@
             "name": "amount",
             "docs": [
               "Kitne lamports withdraw hue"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "docs": [
+              "Total games created. Unique ID ke liye use hota hai."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GamePool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "docs": [
+              "Game creator ka wallet address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "opponent",
+            "docs": [
+              "Game joiner ka wallet address (None jab tak kisi ne join nahi kiya)."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Har user kitne tokens stake karega (Bet amount)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_choice",
+            "docs": [
+              "Creator ne kya choose kiya (0: Head, 1: Tail)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "result",
+            "docs": [
+              "Coin flip ka final result (None jab tak resolved nahi, 0: Head, 1: Tail)."
+            ],
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner ka wallet address."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Unique Game ID — PDA derive karne ke liye use hota hai."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Status: 0 = Open (Waiting for opponent), 1 = Resolved (Winner declared)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA ka bump seed."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GamePoolCreated",
+      "docs": [
+        "Jab koi user naya game pool create karta hai."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool_id",
+            "docs": [
+              "Unique game ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Game banane wale ka address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Kitne tokens stake kiye (bet amount)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "choice",
+            "docs": [
+              "Creator ne kya choose kiya (0: Head, 1: Tail)"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameResolved",
+      "docs": [
+        "Jab doosra user game join karta hai aur result resolve ho jata hai."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool_id",
+            "docs": [
+              "Kis game pool ka result hai"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "loser",
+            "docs": [
+              "Loser ka wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "result",
+            "docs": [
+              "Coin flip ka result (0: Head, 1: Tail)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "total_pool",
+            "docs": [
+              "Total tokens jo distribution ke liye available the (Amount * 2)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Admin ko kitni fee gayi (Treasury fee)"
             ],
             "type": "u64"
           }

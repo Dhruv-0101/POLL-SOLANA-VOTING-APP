@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-polldotsol = "ELNrAWpfSxjsKvshh2DqMdQrCSW96QnDsQBu8222HEGo"
+polldotsol = "GuEoAC4UQV37E7fuogaSUpxfVGebb1xerv64Zj9Cbg1o"
 
 [registry]
 url = "https://api.apr.dev"

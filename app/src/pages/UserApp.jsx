@@ -21,7 +21,7 @@ const UserApp = () => {
     const anchorWallet = useAnchorWallet();
     
     // UI State
-    const [activeTab, setActiveTab] = useState('buy'); // buy, create, vote, earnings
+    const [activeTab, setActiveTab] = useState('buy'); // buy, create, vote, earnings, game
     const [logs, setLogs] = useState(() => {
         const saved = localStorage.getItem('user_logs');
         return saved ? JSON.parse(saved) : [];
@@ -41,6 +41,16 @@ const UserApp = () => {
     const [proposalCost, setProposalCost] = useState(0);
     const [voteCost, setVoteCost] = useState(0);
     const [slippage, setSlippage] = useState(1); // 1% fallback
+
+    // --- Flip a Coin State ---
+    const [gamePools, setGamePools] = useState([]);
+    const [betAmount, setBetAmount] = useState(10);
+    const [userChoice, setUserChoice] = useState(0); // 0: Head, 1: Tail
+    const [isCreatingPool, setIsCreatingPool] = useState(false);
+    const [isJoiningPool, setIsJoiningPool] = useState(false);
+    const [gameIdInput, setGameIdInput] = useState("");
+    const [isFlipping, setIsFlipping] = useState(false);
+    const [lastGameResult, setLastGameResult] = useState(null);
 
     // Buy Tokens State
     const [buyAmount, setBuyAmount] = useState(10);
@@ -65,6 +75,14 @@ const UserApp = () => {
         const saved = localStorage.getItem('total_redeemed');
         return saved ? Number(saved) : 0;
     });
+    const [totalEarned, setTotalEarned] = useState(() => {
+        const saved = localStorage.getItem('total_earned');
+        return saved ? Number(saved) : 0;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('total_earned', totalEarned.toString());
+    }, [totalEarned]);
 
     useEffect(() => {
         localStorage.setItem('total_redeemed', totalRedeemed.toString());
@@ -200,11 +218,18 @@ const UserApp = () => {
                     const symbol = metadataInfo.data.slice(105, 105 + 10).toString('utf8').replace(/\u0000/g, '').trim();
                     if (symbol) {
                         setTokenSymbol(symbol);
-                        console.log("Token Symbol:", symbol);
                     }
                 }
             } catch (err) {
                 console.warn("Metadata Fetch Error:", err);
+            }
+
+            // --- FETCH GAME POOLS ---
+            try {
+                const games = await program.account.gamePool.all();
+                setGamePools(games.sort((a, b) => b.account.poolId.toNumber() - a.account.poolId.toNumber()));
+            } catch (e) {
+                console.warn("Games fetch error:", e);
             }
 
         } catch (err) {
@@ -269,7 +294,6 @@ const UserApp = () => {
         return totalRefund;
     };
 
-    const livePrice = basePrice + slope * Math.floor(tokensSold / 1);
 
     // BUY TOKENS Logic
     const handleBuyTokens = async () => {
@@ -353,6 +377,28 @@ const UserApp = () => {
         } finally {
             setIsBuying(false);
         }
+    };
+
+    const addOption = () => {
+        if (options.length < 10) {
+            setOptions([...options, ""]);
+        }
+    };
+
+    const removeOption = (index) => {
+        if (options.length > 2) {
+            const newOptions = [...options];
+            newOptions.splice(index, 1);
+            setOptions(newOptions);
+        } else {
+            appendLog("Proposal must have at least 2 options!", true);
+        }
+    };
+
+    const updateOption = (index, value) => {
+        const newOptions = [...options];
+        newOptions[index] = value;
+        setOptions(newOptions);
     };
 
     // CREATE PROPOSAL Logic
@@ -575,6 +621,16 @@ const UserApp = () => {
                 .rpc();
 
             appendLog(`Proposal Finalized! Earnings claimed. Tx: ${tx.substring(0, 8)}...`);
+            
+            // Update totalEarned from voting escrow
+            try {
+                const proposalAcc = await program.account.proposal.fetch(proposalPda);
+                const earned = (proposalAcc.totalVotes.toNumber() * voteCost);
+                setTotalEarned(prev => prev + earned);
+            } catch (e) {
+                console.error("Error updating earnings:", e);
+            }
+
             setTimeout(fetchProgramState, 2000);
         } catch (err) {
             console.error("Finalize Error:", err);
@@ -682,20 +738,170 @@ const UserApp = () => {
         }
     };
 
-    const addOption = () => {
-        if (options.length < 10) setOptions([...options, ""]);
+    // --- CREATE GAME POOL ---
+    const handleCreateGamePool = async () => {
+        if (!anchorWallet) return;
+        if (pollBalance < betAmount) {
+            appendLog(`Insufficient ${tokenSymbol} balance!`, true);
+            return;
+        }
+
+        setIsCreatingPool(true);
+        appendLog(`Creating ${betAmount} tokens game pool...`);
+
+        try {
+            const provider = new AnchorProvider(connection, anchorWallet, { preflightCommitment: "confirmed" });
+            const program = new Program(idl, provider);
+            
+            const allTreasuries = await program.account.treasury.all();
+            const treasuryState = allTreasuries[0].account;
+            const treasuryPda = allTreasuries[0].publicKey;
+            const mintPda = treasuryState.mint;
+
+            const [counterPda] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("game_counter"), treasuryPda.toBytes()],
+                program.programId
+            );
+
+            let currentCount = 0;
+            try {
+                const counterState = await program.account.gameCounter.fetch(counterPda);
+                currentCount = counterState.count.toNumber();
+            } catch (e) {}
+
+            const [gamePoolPda] = PublicKey.findProgramAddressSync(
+                [
+                    new TextEncoder().encode("game_pool"), 
+                    treasuryPda.toBytes(), 
+                    new BN(currentCount).toArrayLike(Buffer, "le", 8)
+                ],
+                program.programId
+            );
+
+            const [gameEscrow] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("game_escrow"), gamePoolPda.toBytes()],
+                program.programId
+            );
+
+            const creatorTokenAccount = getAssociatedTokenAddressSync(mintPda, anchorWallet.publicKey);
+            const amountBN = new BN(betAmount).mul(new BN(10).pow(new BN(decimals)));
+
+            const tx = await program.methods
+                .createGamePool(amountBN, userChoice)
+                .accounts({
+                    creator: anchorWallet.publicKey,
+                    treasury: treasuryPda,
+                    mint: mintPda,
+                    gameCounter: counterPda,
+                    gamePool: gamePoolPda,
+                    gameEscrow: gameEscrow,
+                    creatorTokenAccount: creatorTokenAccount,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId,
+                    rent: SYSVAR_RENT_PUBKEY,
+                })
+                .rpc();
+
+            appendLog(`Game Created! ID: ${currentCount}. Tx: ${tx.substring(0, 8)}`);
+            setTimeout(fetchProgramState, 2000);
+        } catch (err) {
+            console.error("Create Game Error:", err);
+            appendLog(`Error: ${err.message}`, true);
+        } finally {
+            setIsCreatingPool(false);
+        }
     };
 
-    const removeOption = (index) => {
-        if (options.length > 2) setOptions(options.filter((_, i) => i !== index));
+    // --- JOIN GAME POOL ---
+    const handleJoinGamePool = async (poolData) => {
+        if (!anchorWallet) return;
+        
+        const pool = poolData.account;
+        const entryFee = pool.amount.toNumber() / (10 ** decimals);
+        
+        if (pollBalance < entryFee) {
+            appendLog(`Insufficient ${tokenSymbol} for entry fee!`, true);
+            return;
+        }
+
+        setIsJoiningPool(true);
+        appendLog(`Joining Game #${pool.poolId.toNumber()}...`);
+
+        try {
+            const provider = new AnchorProvider(connection, anchorWallet, { preflightCommitment: "confirmed" });
+            const program = new Program(idl, provider);
+            
+            const allTreasuries = await program.account.treasury.all();
+            const treasuryState = allTreasuries[0].account;
+            const treasuryPda = allTreasuries[0].publicKey;
+            const mintPda = treasuryState.mint;
+
+            const [gameEscrow] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("game_escrow"), poolData.publicKey.toBytes()],
+                program.programId
+            );
+
+            const joinerTokenAccount = getAssociatedTokenAddressSync(mintPda, anchorWallet.publicKey);
+            const creatorTokenAccount = getAssociatedTokenAddressSync(mintPda, pool.creator);
+
+            const tx = await program.methods
+                .joinGamePool()
+                .accounts({
+                    joiner: anchorWallet.publicKey,
+                    creator: pool.creator,
+                    treasury: treasuryPda,
+                    mint: mintPda,
+                    gamePool: poolData.publicKey,
+                    gameEscrow: gameEscrow,
+                    joinerTokenAccount: joinerTokenAccount,
+                    creatorTokenAccount: creatorTokenAccount,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                })
+                .rpc();
+
+            // Fetch resolved result
+            const updatedPool = await program.account.gamePool.fetch(poolData.publicKey);
+            const win = updatedPool.winner.equals(anchorWallet.publicKey);
+            
+            // Flip Animation
+            setIsFlipping(true);
+            setLastGameResult(null);
+            
+            setTimeout(() => {
+                setIsFlipping(false);
+                const winningReward = (pool.amount.toNumber() * 2) / (10 ** decimals);
+                setLastGameResult({
+                    win,
+                    result: updatedPool.result,
+                    reward: winningReward
+                });
+                
+                if (win) {
+                    // Update totalEarned when user wins coin flip
+                    // Note: reward includes the user's own bet, but usually "earned" means profit? 
+                    // Let's count full reward towards "Total Earned" dashboard or just profit?
+                    // Usually users want to see full reward.
+                    setTotalEarned(prev => prev + winningReward);
+                }
+
+                appendLog(`Game Resolved: You ${win ? 'WON' : 'LOST'}! Result: ${updatedPool.result === 0 ? 'HEADS' : 'TAILS'}`);
+                fetchProgramState();
+            }, 3000);
+
+        } catch (err) {
+            console.error("Join Game Error:", err);
+            appendLog(`Error: ${err.message}`, true);
+        } finally {
+            setIsJoiningPool(false);
+        }
     };
 
-    const updateOption = (index, value) => {
-        const newOptions = [...options];
-        newOptions[index] = value;
-        setOptions(newOptions);
-    };
-
+    // --- DERIVED UI STATE ---
+    const livePrice = basePrice + (slope * tokensSold);
+    
     // UI Calculations (Matching Batch Logic)
     const currentCost = calculateCost(buyAmount, tokensSold, basePrice, slope);
     const buyFee = (currentCost * feePercentage) / 100;
@@ -705,12 +911,6 @@ const UserApp = () => {
     const currentRefund = calculateRefund(redeemAmount, tokensSold, basePrice, slope);
     const redeemFee = (currentRefund * feePercentage) / 100;
     const redeemNet = currentRefund - redeemFee;
-
-    // Stats
-    const totalEarned = anchorWallet 
-        ? proposals.filter(p => p.account.creator.equals(anchorWallet.publicKey) && p.account.isFinalized)
-                   .reduce((sum, p) => sum + p.account.totalVotes.toNumber(), 0)
-        : 0;
 
     return (
         <div style={{
@@ -785,6 +985,7 @@ const UserApp = () => {
                             { id: 'buy', icon: <Zap size={18} />, label: `Buy ${tokenSymbol}` },
                             { id: 'create', icon: <FilePlus size={18} />, label: 'Create Proposal' },
                             { id: 'vote', icon: <Vote size={18} />, label: 'Vote' },
+                            { id: 'game', icon: <Coins size={18} />, label: 'Flip a Coin' },
                             { id: 'earnings', icon: <TrendingUp size={18} />, label: 'Earnings & Redeem' }
                         ].map(item => (
                             <button
@@ -1321,7 +1522,228 @@ const UserApp = () => {
                             </div>
                         </div>
                     )}
+                    {activeTab === 'game' && (
+                        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            {/* GAME HEADER & JOIN BY ID */}
+                            <div className="card" style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, rgba(20,20,20,1) 0%, rgba(30,30,30,1) 100%)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <div style={{ color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '0.6rem', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                                        <Coins size={28} />
+                                    </div>
+                                    <div>
+                                        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>Flip a Coin</h2>
+                                        <p className="text-dim text-sm font-mono">// 2-Player Token Battle</p>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Enter Game ID..."
+                                        value={gameIdInput}
+                                        onChange={(e) => setGameIdInput(e.target.value)}
+                                        style={{ backgroundColor: '#000', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'white', width: '160px', fontFamily: 'var(--font-mono)' }}
+                                    />
+                                    <button 
+                                        onClick={() => {
+                                            const pool = gamePools.find(p => p.account.poolId.toNumber() === parseInt(gameIdInput));
+                                            if (pool) handleJoinGamePool(pool);
+                                            else appendLog("Game ID not found!", true);
+                                        }}
+                                        disabled={isJoiningPool || !gameIdInput}
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0 1.5rem', fontWeight: 700 }}
+                                    >
+                                        JOIN
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
+                                {/* CREATE POOL SECTION */}
+                                <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Create New Pool</h3>
+                                    
+                                    <div>
+                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">Bet Amount ({tokenSymbol})</label>
+                                        <input 
+                                            type="number" 
+                                            value={betAmount}
+                                            onChange={(e) => setBetAmount(Number(e.target.value))}
+                                            style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '1rem', fontSize: '1.25rem', color: 'white', fontWeight: 700 }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">Select Side</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <button 
+                                                onClick={() => setUserChoice(0)}
+                                                style={{ 
+                                                    padding: '1.5rem', 
+                                                    borderRadius: '12px', 
+                                                    border: userChoice === 0 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
+                                                    backgroundColor: userChoice === 0 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
+                                                    color: userChoice === 0 ? 'white' : 'var(--text-dim)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    fontWeight: 800
+                                                }}
+                                            >
+                                                HEADS
+                                            </button>
+                                            <button 
+                                                onClick={() => setUserChoice(1)}
+                                                style={{ 
+                                                    padding: '1.5rem', 
+                                                    borderRadius: '12px', 
+                                                    border: userChoice === 1 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
+                                                    backgroundColor: userChoice === 1 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
+                                                    color: userChoice === 1 ? 'white' : 'var(--text-dim)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    fontWeight: 800
+                                                }}
+                                            >
+                                                TAILS
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={handleCreateGamePool}
+                                        disabled={isCreatingPool || !anchorWallet || pollBalance < betAmount}
+                                        className="btn btn-primary"
+                                        style={{ padding: '1.25rem', fontSize: '1rem', fontWeight: 800, marginTop: '1rem' }}
+                                    >
+                                        {isCreatingPool ? 'CREATING...' : `CREATE POOL (${betAmount} ${tokenSymbol})`}
+                                    </button>
+                                </div>
+
+                                {/* ACTIVE POOLS SECTION */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.5rem' }}>
+                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Open Game Pools</h3>
+                                        <span className="text-dim font-mono text-xs">{gamePools.filter(g => g.account.status === 0).length} Available</span>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                        {gamePools.filter(g => g.account.status === 0).length === 0 ? (
+                                            <div className="card" style={{ padding: '3rem', textAlign: 'center', borderStyle: 'dashed' }}>
+                                                <p className="text-dim text-sm italic">No open pools. Start one!</p>
+                                            </div>
+                                        ) : (
+                                            gamePools.filter(g => g.account.status === 0).map((g, i) => (
+                                                <div key={i} className="card animate-fade-in" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>GAME ID: #{g.account.poolId.toString()}</div>
+                                                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white' }}>{g.account.amount.toNumber() / (10 ** decimals)} {tokenSymbol}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-green)', fontWeight: 600 }}>Creator: {g.account.creator.toBase58().substring(0, 6)}...</div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                        <div style={{ textAlign: 'right', fontSize: '0.8rem' }}>
+                                                            <div className="text-dim">Opponent gets</div>
+                                                            <div style={{ color: '#f59e0b', fontWeight: 700 }}>{g.account.creatorChoice === 0 ? 'TAILS' : 'HEADS'}</div>
+                                                        </div>
+                                                        <button 
+                                                            disabled={isJoiningPool || (anchorWallet && g.account.creator.equals(anchorWallet.publicKey))}
+                                                            onClick={() => handleJoinGamePool(g)}
+                                                            className="btn btn-secondary"
+                                                            style={{ 
+                                                                padding: '0.75rem 1.25rem', 
+                                                                fontSize: '0.8rem', 
+                                                                backgroundColor: anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? '#111' : 'var(--accent-green-dim)',
+                                                                border: '1px solid var(--accent-green-border)'
+                                                            }}
+                                                        >
+                                                            {anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? 'OWN POOL' : 'JOIN & FLIP'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* FLIP ANIMATION OVERLAY */}
+                            {(isFlipping || lastGameResult) && (
+                                <div style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    backgroundColor: 'rgba(0,0,0,0.9)',
+                                    zIndex: 2000,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backdropFilter: 'blur(10px)',
+                                    animation: 'fadeIn 0.3s ease'
+                                }}>
+                                    {isFlipping ? (
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div className="coin-spin" style={{
+                                                width: '120px',
+                                                height: '120px',
+                                                backgroundColor: '#f59e0b',
+                                                borderRadius: '50%',
+                                                border: '6px solid #b45309',
+                                                boxShadow: '0 0 50px rgba(245, 158, 11, 0.4)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '3rem',
+                                                fontWeight: 900,
+                                                color: '#b45309',
+                                                marginBottom: '2rem'
+                                            }}>
+                                                $
+                                            </div>
+                                            <h2 className="animate-pulse" style={{ fontSize: '2rem', fontWeight: 800 }}>FLIPPING...</h2>
+                                            <p className="font-mono text-dim mt-2">// Good Luck!</p>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-fade-in" style={{ textAlign: 'center', transform: 'scale(1.2)' }}>
+                                            <div style={{
+                                                width: '100px',
+                                                height: '100px',
+                                                borderRadius: '50%',
+                                                backgroundColor: lastGameResult.win ? 'var(--accent-green)' : '#ef4444',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '2.5rem',
+                                                marginBottom: '1.5rem',
+                                                marginInline: 'auto',
+                                                boxShadow: lastGameResult.win ? '0 0 40px var(--accent-green-dim)' : '0 0 40px rgba(239, 68, 68, 0.2)'
+                                            }}>
+                                                {lastGameResult.win ? '🏆' : '💀'}
+                                            </div>
+                                            <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: lastGameResult.win ? 'var(--accent-green)' : '#ef4444' }}>
+                                                {lastGameResult.win ? 'YOU WON!' : 'YOU LOST!'}
+                                            </h2>
+                                            <p style={{ fontSize: '1.25rem', marginTop: '1rem', fontWeight: 600 }}>
+                                                Result: <span style={{ color: '#f59e0b' }}>{lastGameResult.result === 0 ? 'HEADS' : 'TAILS'}</span>
+                                            </p>
+                                            {lastGameResult.win && (
+                                                <div style={{ fontSize: '1.25rem', marginTop: '0.5rem', color: 'var(--accent-green)' }}>
+                                                    + {lastGameResult.reward.toFixed(2)} {tokenSymbol}
+                                                </div>
+                                            )}
+                                            <button 
+                                                onClick={() => setLastGameResult(null)}
+                                                className="btn btn-secondary"
+                                                style={{ marginTop: '2.5rem', padding: '0.75rem 3rem' }}
+                                            >
+                                                CLOSE
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
+
             </div>
         </div>
     );

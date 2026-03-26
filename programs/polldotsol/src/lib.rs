@@ -47,7 +47,7 @@ use events::*; // Sare events import (* = sab kuch) // Sare contexts import
 // `anchor init` ke time generate hota hai.
 // Har program ka ek unique ID hota hai Solana pe.
 // ============================================================================
-declare_id!("ELNrAWpfSxjsKvshh2DqMdQrCSW96QnDsQBu8222HEGo");
+declare_id!("GuEoAC4UQV37E7fuogaSUpxfVGebb1xerv64Zj9Cbg1o");
 
 // ============================================================================
 // #[program] MACRO
@@ -1266,6 +1266,141 @@ pub mod polldotsol {
         emit!(FeesWithdrawn {
             admin: ctx.accounts.admin.key(),
             amount,
+        });
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // INSTRUCTION 10: CREATE GAME POOL (Flip a Coin)
+    // ========================================================================
+    // User naya game pool create karta hai Head ya Tail choose karke.
+    // Bet tokens escrow me lock ho jaate hain.
+    // ========================================================================
+    pub fn create_game_pool(ctx: Context<CreateGamePool>, amount: u64, choice: u8) -> Result<()> {
+        require!(amount > 0, PollError::InvalidBetAmount);
+        require!(choice <= 1, PollError::InvalidGameChoice);
+
+        let game_pool = &mut ctx.accounts.game_pool;
+        let game_counter = &mut ctx.accounts.game_counter;
+
+        game_pool.creator = ctx.accounts.creator.key();
+        game_pool.amount = amount;
+        game_pool.creator_choice = choice;
+        game_pool.pool_id = game_counter.count;
+        game_pool.status = 0; // Open
+        game_pool.bump = ctx.bumps.game_pool;
+
+        // Transfer tokens from creator to escrow
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.creator_token_account.to_account_info(),
+                    to: ctx.accounts.game_escrow.to_account_info(),
+                    authority: ctx.accounts.creator.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        // Increment counter for next pool ID
+        game_counter.count += 1;
+
+        emit!(GamePoolCreated {
+            pool_id: game_pool.pool_id,
+            creator: game_pool.creator,
+            amount,
+            choice,
+        });
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // INSTRUCTION 11: JOIN GAME POOL (Flip a Coin)
+    // ========================================================================
+    // Doosra user game join karta hai. Result instantly resolve hota hai.
+    // Winner reward receive karta hai minus admin fee.
+    // ========================================================================
+    pub fn join_game_pool(ctx: Context<JoinGamePool>) -> Result<()> {
+        let game_pool = &mut ctx.accounts.game_pool;
+        let amount = game_pool.amount;
+
+        // Transfer tokens from joiner to escrow
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.joiner_token_account.to_account_info(),
+                    to: ctx.accounts.game_escrow.to_account_info(),
+                    authority: ctx.accounts.joiner.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        game_pool.opponent = Some(ctx.accounts.joiner.key());
+
+        // Simple Randomness Logic (Slot ^ Timestamp)
+        let clock = Clock::get()?;
+        let random_res = (clock.slot ^ clock.unix_timestamp as u64) % 2;
+        let result = random_res as u8;
+        game_pool.result = Some(result);
+
+        // Determine Winner
+        let winner = if game_pool.creator_choice == result {
+            game_pool.creator
+        } else {
+            ctx.accounts.joiner.key()
+        };
+        game_pool.winner = Some(winner);
+        game_pool.status = 1; // Resolved
+
+        // Reward logic
+        let total_pool = amount.checked_mul(2).ok_or(PollError::ArithmeticOverflow)?;
+
+        // Signing for Escrow transfer (PDA derivation)
+        let pool_id_bytes = game_pool.pool_id.to_le_bytes();
+        let seeds = &[
+            b"game_pool",
+            ctx.accounts.treasury.to_account_info().key.as_ref(),
+            pool_id_bytes.as_ref(),
+            &[game_pool.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        // 1. Transfer Winner Reward
+        let winner_ata = if winner == game_pool.creator {
+            ctx.accounts.creator_token_account.to_account_info()
+        } else {
+            ctx.accounts.joiner_token_account.to_account_info()
+        };
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.game_escrow.to_account_info(),
+                    to: winner_ata,
+                    authority: game_pool.to_account_info(),
+                },
+                signer,
+            ),
+            total_pool, // Award full pool to winner
+        )?;
+
+        emit!(GameResolved {
+            pool_id: game_pool.pool_id,
+            winner,
+            loser: if winner == game_pool.creator {
+                ctx.accounts.joiner.key()
+            } else {
+                game_pool.creator
+            },
+            result,
+            total_pool,
+            fee: 0,
         });
 
         Ok(())

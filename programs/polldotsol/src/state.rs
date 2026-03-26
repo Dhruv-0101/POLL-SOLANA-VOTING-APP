@@ -219,3 +219,55 @@ pub struct ProposalCounter {
     /// Example: agar count = 5, toh next proposal ka ID = 6.
     pub count: u64, // 8
 }
+
+// ============================================================================
+// GAME COUNTER STATE
+// ============================================================================
+// GameCounter track karta hai ki ab tak kitne games (Flip a Coin)
+// create ho chuke hain taaki har naye game ko unique ID mile.
+// ============================================================================
+#[account]
+#[derive(InitSpace)]
+pub struct GameCounter {
+    /// Total games created. Unique ID ke liye use hota hai.
+    pub count: u64, // 8
+}
+
+// ============================================================================
+// GAME POOL STATE
+// ============================================================================
+// GamePool 'Flip a Coin' game ka state store karta hai.
+// Isme do players hote hain jo tokens bet karte hain.
+// Ek player naya pool banata hai (Head/Tail choose karke)
+// aur doosra join karta hai (opposite automatic milta hai).
+// ============================================================================
+#[account]
+#[derive(InitSpace)]
+pub struct GamePool {
+    /// Game creator ka wallet address.
+    pub creator: Pubkey, // 32
+
+    /// Game joiner ka wallet address (None jab tak kisi ne join nahi kiya).
+    pub opponent: Option<Pubkey>, // 1 + 32 = 33
+
+    /// Har user kitne tokens stake karega (Bet amount).
+    pub amount: u64, // 8
+
+    /// Creator ne kya choose kiya (0: Head, 1: Tail).
+    pub creator_choice: u8, // 1
+
+    /// Coin flip ka final result (None jab tak resolved nahi, 0: Head, 1: Tail).
+    pub result: Option<u8>, // 1 + 1 = 2
+
+    /// Winner ka wallet address.
+    pub winner: Option<Pubkey>, // 1 + 32 = 33
+
+    /// Unique Game ID — PDA derive karne ke liye use hota hai.
+    pub pool_id: u64, // 8
+
+    /// Status: 0 = Open (Waiting for opponent), 1 = Resolved (Winner declared)
+    pub status: u8, // 1
+
+    /// PDA ka bump seed.
+    pub bump: u8, // 1
+}

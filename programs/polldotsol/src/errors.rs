@@ -188,4 +188,19 @@ pub enum PollError {
     /// set kiya tha woh cross ho gaya.
     #[msg("Slippage tolerance exceeded")]
     SlippageExceeded,
+
+    // =========================================================================
+    // Game Related Errors (Flip a Coin)
+    // =========================================================================
+    /// Choice 0 (Head) ya 1 (Tail) hi ho sakti hai.
+    #[msg("Choice must be 0 (Head) or 1 (Tail)")]
+    InvalidGameChoice,
+
+    /// Game pool me sirf 2 log allowed hain.
+    #[msg("Game pool is already full")]
+    GamePoolFull,
+
+    /// Bet amount zero nahi ho sakta.
+    #[msg("Bet amount must be greater than zero")]
+    InvalidBetAmount,
 }
