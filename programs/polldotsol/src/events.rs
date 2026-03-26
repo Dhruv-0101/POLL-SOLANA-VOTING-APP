@@ -74,8 +74,10 @@ pub struct TreasuryInitialized {
 ///                             vote_cost: 1_000_000, fee_basis_points: 1000 }
 #[event]
 pub struct PlatformSettingsUpdated {
-    /// 1 token ka price lamports me (1 SOL = 1_000_000_000 lamports)
-    pub token_price: u64,
+    /// Initial starting price
+    pub base_price: u64,
+    /// Price growth rate
+    pub slope: u64,
     /// Proposal create karne ke liye kitne tokens chahiye (smallest unit me)
     pub proposal_cost: u64,
     /// Vote karne ke liye kitne tokens chahiye (smallest unit me)

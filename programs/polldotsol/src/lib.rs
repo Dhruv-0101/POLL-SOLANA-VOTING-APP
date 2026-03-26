@@ -47,7 +47,7 @@ use events::*; // Sare events import (* = sab kuch) // Sare contexts import
 // `anchor init` ke time generate hota hai.
 // Har program ka ek unique ID hota hai Solana pe.
 // ============================================================================
-declare_id!("G4r1hQssG9bVpJHA5Fot25gYcNDWnq8yk8vgjApxpu8V");
+declare_id!("ELNrAWpfSxjsKvshh2DqMdQrCSW96QnDsQBu8222HEGo");
 
 // ============================================================================
 // #[program] MACRO
@@ -83,7 +83,7 @@ pub mod polldotsol {
     //   → Mint created at PDA ["mint", admin_pubkey]
     //   → Treasury initialized with admin = caller, mint = new_mint
     // ========================================================================
-    pub fn create_token(ctx: Context<CreateToken>, _decimals: u8) -> Result<()> {
+    pub fn create_token(ctx: Context<CreateToken>, decimals: u8) -> Result<()> {
         // -------------------------------------------------------------------
         // Treasury state account ka mutable reference lete hain.
         // `&mut` kyunki hume iske fields update karne hain.
@@ -110,7 +110,7 @@ pub mod polldotsol {
         // -------------------------------------------------------------------
         emit!(TokenCreated {
             mint: ctx.accounts.mint.key(), // Mint ka address
-            decimals: _decimals,           // Kitne decimal places
+            decimals,                      // Kitne decimal places
         });
 
         // -------------------------------------------------------------------
@@ -139,43 +139,42 @@ pub mod polldotsol {
     //   → SOL Vault PDA confirmed
     //   → treasury.is_initialized = true
     // ========================================================================
-    pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
+    pub fn initialize_treasury(
+        ctx: Context<InitializeTreasury>,
+        base_price: u64,
+        slope: u64,
+    ) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
 
         // -------------------------------------------------------------------
         // Check: Agar treasury pehle se initialized hai toh error throw karo.
-        // require!() macro condition check karta hai:
-        //   - Condition true → continue
-        //   - Condition false → specified error return karo aur abort karo
         // -------------------------------------------------------------------
         require!(
-            !treasury.is_initialized, // false hona chahiye (not initialized)
-            PollError::TreasuryAlreadyInitialized  // Agar true hai → yeh error
+            !treasury.is_initialized,
+            PollError::TreasuryAlreadyInitialized
         );
 
         // -------------------------------------------------------------------
+        // Bonding Curve initial values set karte hain.
+        // base_price ('a') aur slope ('b') ek baar set honge.
+        // -------------------------------------------------------------------
+        require!(base_price > 0, PollError::InvalidTokenPrice);
+        treasury.base_price = base_price;
+        treasury.slope = slope;
+        treasury.tokens_sold = 0; // Starts from zero
+
+        // -------------------------------------------------------------------
         // Treasury token account ka address save karte hain.
-        // Baad me mint/transfer operations me yeh address use hoga.
         // -------------------------------------------------------------------
         treasury.treasury_token_account = ctx.accounts.treasury_token_account.key();
 
         // -------------------------------------------------------------------
         // Vault ka bump seed save karte hain.
-        // PDA (Program Derived Address) ko sign karne ke liye bump chahiye.
-        //
-        // PDA kya hai?
-        // Normal address = private key se generate hota hai
-        // PDA = seeds + bump se generate hota hai (koi private key nahi)
-        // Program PDA ko "sign" kar sakta hai CPI ke through.
-        //
-        // ctx.bumps me Anchor automatically sare bumps store karta hai
-        // jinhe #[account] constraints me define kiya hai.
         // -------------------------------------------------------------------
         treasury.vault_bump = ctx.bumps.vault;
 
         // -------------------------------------------------------------------
         // Treasury ko initialized mark karte hain.
-        // Ab se yeh check pass nahi hoga: !treasury.is_initialized
         // -------------------------------------------------------------------
         treasury.is_initialized = true;
 
@@ -434,7 +433,8 @@ pub mod polldotsol {
     // ========================================================================
     pub fn update_platform_settings(
         ctx: Context<UpdatePlatformSettings>,
-        token_price: u64,
+        base_price: u64,
+        slope: u64,
         proposal_cost: u64,
         vote_cost: u64,
         fee_basis_points: u16,
@@ -442,7 +442,7 @@ pub mod polldotsol {
         // -------------------------------------------------------------------
         // Sab values validate karte hain — 0 ya invalid nahi honi chahiye.
         // -------------------------------------------------------------------
-        require!(token_price > 0, PollError::InvalidTokenPrice);
+        require!(base_price > 0, PollError::InvalidTokenPrice);
         require!(proposal_cost > 0, PollError::InvalidProposalCost);
         require!(vote_cost > 0, PollError::InvalidVoteCost);
         require!(fee_basis_points <= 10000, PollError::InvalidFeePercentage);
@@ -451,7 +451,8 @@ pub mod polldotsol {
         // Treasury me values update karte hain.
         // -------------------------------------------------------------------
         let treasury = &mut ctx.accounts.treasury;
-        treasury.token_price = token_price;
+        treasury.base_price = base_price;
+        treasury.slope = slope;
         treasury.proposal_cost = proposal_cost;
         treasury.vote_cost = vote_cost;
         treasury.fee_basis_points = fee_basis_points;
@@ -460,7 +461,8 @@ pub mod polldotsol {
         // PlatformSettingsUpdated event emit karte hain.
         // -------------------------------------------------------------------
         emit!(PlatformSettingsUpdated {
-            token_price,
+            base_price,
+            slope,
             proposal_cost,
             vote_cost,
             fee_basis_points,
@@ -493,54 +495,61 @@ pub mod polldotsol {
     //
     //   User pays 1.1 SOL → gets 10 tokens
     // ========================================================================
-    pub fn buy_tokens(ctx: Context<BuyTokens>, amount: u64) -> Result<()> {
+    pub fn buy_tokens(ctx: Context<BuyTokens>, amount: u64, max_cost: u64) -> Result<()> {
         // -------------------------------------------------------------------
         // Validate: 0 tokens buy karne ka koi matlab nahi.
         // -------------------------------------------------------------------
         require!(amount > 0, PollError::InvalidBuyAmount);
 
-        let treasury = &ctx.accounts.treasury;
+        let treasury = &mut ctx.accounts.treasury;
 
         // -------------------------------------------------------------------
         // Check: Treasury initialized hona chahiye.
         // -------------------------------------------------------------------
         require!(treasury.is_initialized, PollError::TreasuryNotInitialized);
 
-        // -------------------------------------------------------------------
-        // SOL cost calculate karte hain.
-        //
-        // Formula: total_sol = (amount * token_price) / 10^decimals
-        //
-        // Kyun divide by 10^6?
-        // Kyunki amount smallest units me hai (e.g., 10_000_000 = 10 tokens)
-        // Aur token_price per WHOLE token hai.
-        // Toh: 10_000_000 * 100_000_000 / 1_000_000 = 1_000_000_000 lamports = 1 SOL
-        //
-        // checked_mul() aur checked_div() overflow protection dete hain.
-        // Agar numbers bahut bade ho jaayein toh None return hote hain
-        // instead of silently wrapping around (which would be a bug).
-        //
-        // .ok_or(...)? → None ko error me convert karta hai.
-        //   ? operator automatically error return karta hai agar Err ho.
-        // -------------------------------------------------------------------
-        let decimals: u64 = 1_000_000; // 10^6 for 6 decimal places
-        let total_sol_cost = (amount as u128)
-            .checked_mul(treasury.token_price as u128)
-            .ok_or(PollError::ArithmeticOverflow)?
-            .checked_div(decimals as u128)
-            .ok_or(PollError::ArithmeticOverflow)? as u64;
+        let mut total_sol_cost_u128: u128 = 0;
+        let decimals: u64 = 1_000_000;
+        let mut remaining_amount = amount;
+        let mut current_x = treasury.tokens_sold;
+
+        // Har whole token boundary pe price badhta hai.
+        // Yeh loop efficient hai kyunki yeh full tokens ko batches me treat karta hai.
+        while remaining_amount > 0 {
+            let next_boundary = (current_x / decimals + 1) * decimals;
+            let tokens_to_boundary = next_boundary
+                .checked_sub(current_x)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            let batch_size = std::cmp::min(remaining_amount, tokens_to_boundary);
+
+            let x_whole = current_x / decimals;
+            let price_per_full_token = (treasury.base_price as u128)
+                .checked_add(
+                    (treasury.slope as u128)
+                        .checked_mul(x_whole as u128)
+                        .ok_or(PollError::ArithmeticOverflow)?,
+                )
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            let batch_cost = price_per_full_token
+                .checked_mul(batch_size as u128)
+                .ok_or(PollError::ArithmeticOverflow)?
+                .checked_div(decimals as u128)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            total_sol_cost_u128 = total_sol_cost_u128
+                .checked_add(batch_cost)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            remaining_amount -= batch_size;
+            current_x += batch_size;
+        }
+
+        let total_sol_cost = total_sol_cost_u128 as u64;
 
         // -------------------------------------------------------------------
         // Fee calculate karte hain.
-        //
-        // Formula: fee = total_sol_cost * fee_basis_points / 10000
-        //
-        // Basis points kya hai?
-        // 1 basis point = 0.01%
-        // 100 basis points = 1%
-        // 1000 basis points = 10%
-        //
-        // Example: 1_000_000_000 * 1000 / 10000 = 100_000_000 (0.1 SOL fee)
         // -------------------------------------------------------------------
         let fee = (total_sol_cost as u128)
             .checked_mul(treasury.fee_basis_points as u128)
@@ -556,8 +565,12 @@ pub mod polldotsol {
             .ok_or(PollError::ArithmeticOverflow)?;
 
         // -------------------------------------------------------------------
+        // Slippage Protection: Reject if total_payment > max_cost
+        // -------------------------------------------------------------------
+        require!(total_payment <= max_cost, PollError::SlippageExceeded);
+
+        // -------------------------------------------------------------------
         // Check: User ke paas enough SOL hai?
-        // buyer.lamports() → buyer ke wallet me kitne lamports hain.
         // -------------------------------------------------------------------
         require!(
             ctx.accounts.buyer.lamports() >= total_payment,
@@ -566,7 +579,6 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // Check: Treasury me enough tokens hain?
-        // treasury_token_account.amount → kitne tokens available hain.
         // -------------------------------------------------------------------
         require!(
             ctx.accounts.treasury_token_account.amount >= amount,
@@ -575,16 +587,6 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // Step 1: SOL transfer — User → Vault
-        //
-        // system_program::transfer() = System Program ka transfer instruction.
-        // Yeh SOL (lamports) transfer karta hai ek account se doosre me.
-        //
-        // CpiContext::new() = normal signer (user ka wallet sign karega).
-        // (PDA nahi sign kar raha, user khud sign kar raha hai apne SOL bhejne ke liye)
-        //
-        // Transfer struct me:
-        // - from: Kaha se SOL jaayega (buyer)
-        // - to: Kaha pe SOL jaayega (vault)
         // -------------------------------------------------------------------
         system_program::transfer(
             CpiContext::new(
@@ -599,19 +601,8 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // Step 2: Token transfer — Treasury → User
-        //
-        // token::transfer() = SPL Token Program ka transfer instruction.
-        // Yeh tokens transfer karta hai ek token account se doosre me.
-        //
-        // CpiContext::new_with_signer() kyunki treasury PDA sign kar raha hai.
-        // Treasury tokens ki authority hai, toh iska signature chahiye.
-        //
-        // token::Transfer struct me:
-        // - from: Treasury token account (source)
-        // - to: Buyer ka token account (destination)
-        // - authority: Treasury PDA (authorizer)
         // -------------------------------------------------------------------
-        let admin_key = ctx.accounts.treasury.admin;
+        let admin_key = treasury.admin;
         let treasury_bump = ctx.bumps.treasury;
         let signer_seeds: &[&[&[u8]]] = &[&[b"treasury", admin_key.as_ref(), &[treasury_bump]]];
 
@@ -621,12 +612,20 @@ pub mod polldotsol {
                 token::Transfer {
                     from: ctx.accounts.treasury_token_account.to_account_info(),
                     to: ctx.accounts.buyer_token_account.to_account_info(),
-                    authority: ctx.accounts.treasury.to_account_info(),
+                    authority: treasury.to_account_info(),
                 },
                 signer_seeds,
             ),
             amount,
         )?;
+
+        // -------------------------------------------------------------------
+        // Update on-chain state: tokens_sold badh jaata hai
+        // -------------------------------------------------------------------
+        treasury.tokens_sold = treasury
+            .tokens_sold
+            .checked_add(amount)
+            .ok_or(PollError::ArithmeticOverflow)?;
 
         // -------------------------------------------------------------------
         // TokensPurchased event emit karte hain.
@@ -1074,15 +1073,15 @@ pub mod polldotsol {
     //   User gets = 1 - 0.1 = 0.9 SOL
     //   Tokens go back to treasury
     // ========================================================================
-    pub fn redeem_tokens(ctx: Context<RedeemTokens>, amount: u64) -> Result<()> {
+    pub fn redeem_tokens(ctx: Context<RedeemTokens>, amount: u64, min_return: u64) -> Result<()> {
         // -------------------------------------------------------------------
         // Validate input.
         // -------------------------------------------------------------------
         require!(amount > 0, PollError::InvalidRedeemAmount);
-        require!(
-            ctx.accounts.treasury.is_initialized,
-            PollError::TreasuryNotInitialized
-        );
+
+        let treasury = &mut ctx.accounts.treasury;
+
+        require!(treasury.is_initialized, PollError::TreasuryNotInitialized);
 
         // -------------------------------------------------------------------
         // Check: User ke paas enough tokens hain?
@@ -1092,18 +1091,52 @@ pub mod polldotsol {
             PollError::InsufficientTokenBalance
         );
 
-        let treasury = &ctx.accounts.treasury;
-
         // -------------------------------------------------------------------
-        // SOL value calculate karte hain.
-        // Same formula jaise buy me tha — consistency ke liye.
+        // Bonding Curve Refund Calculation (Batch-based optimization):
+        // Har whole token boundary pe price badhta hai.
+        // We go backwards from tokens_sold - 1 down to tokens_sold - amount.
         // -------------------------------------------------------------------
+        let mut total_refund_u128: u128 = 0;
         let decimals: u64 = 1_000_000;
-        let sol_value = (amount as u128)
-            .checked_mul(treasury.token_price as u128)
-            .ok_or(PollError::ArithmeticOverflow)?
-            .checked_div(decimals as u128)
-            .ok_or(PollError::ArithmeticOverflow)? as u64;
+        let mut remaining_amount = amount;
+        let mut current_x = treasury.tokens_sold;
+
+        while remaining_amount > 0 {
+            // Next whole token boundary below current_x
+            let x_minus_one = current_x
+                .checked_sub(1)
+                .ok_or(PollError::ArithmeticOverflow)?;
+            let boundary_below = (x_minus_one / decimals) * decimals;
+            let tokens_to_boundary = current_x
+                .checked_sub(boundary_below)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            let batch_size = std::cmp::min(remaining_amount, tokens_to_boundary);
+
+            let x_whole = x_minus_one / decimals;
+            let price_per_full_token = (treasury.base_price as u128)
+                .checked_add(
+                    (treasury.slope as u128)
+                        .checked_mul(x_whole as u128)
+                        .ok_or(PollError::ArithmeticOverflow)?,
+                )
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            let batch_refund = price_per_full_token
+                .checked_mul(batch_size as u128)
+                .ok_or(PollError::ArithmeticOverflow)?
+                .checked_div(decimals as u128)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            total_refund_u128 = total_refund_u128
+                .checked_add(batch_refund)
+                .ok_or(PollError::ArithmeticOverflow)?;
+
+            remaining_amount -= batch_size;
+            current_x -= batch_size;
+        }
+
+        let sol_value = total_refund_u128 as u64;
 
         // -------------------------------------------------------------------
         // Fee calculate karte hain.
@@ -1116,18 +1149,18 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // User ko milne wala SOL = value - fee.
-        // Fee vault me hi rehti hai (platform ka revenue).
         // -------------------------------------------------------------------
         let sol_to_user = sol_value
             .checked_sub(fee)
             .ok_or(PollError::ArithmeticOverflow)?;
 
         // -------------------------------------------------------------------
+        // Slippage Protection: Reject if sol_to_user < min_return
+        // -------------------------------------------------------------------
+        require!(sol_to_user >= min_return, PollError::SlippageExceeded);
+
+        // -------------------------------------------------------------------
         // Check: Vault me enough SOL hai user ko dene ke liye?
-        //
-        // vault.lamports() → vault me kitne lamports hain.
-        // Note: Vault ko rent-exempt rehna chahiye, toh minimum balance
-        // se neeche nahi ja sakta. But SystemAccount ke liye minimum 0 hai.
         // -------------------------------------------------------------------
         require!(
             ctx.accounts.vault.lamports() >= sol_to_user,
@@ -1136,7 +1169,6 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // Step 1: Token transfer — User → Treasury
-        // User khud sign karta hai apne tokens bhejne ke liye.
         // -------------------------------------------------------------------
         token::transfer(
             CpiContext::new(
@@ -1152,29 +1184,8 @@ pub mod polldotsol {
 
         // -------------------------------------------------------------------
         // Step 2: SOL transfer — Vault → User
-        //
-        // Vault ek PDA system account hai. PDA se SOL transfer karne ke liye
-        // hum directly lamports modify karte hain (System Program CPI nahi).
-        //
-        // Kyun? Kyunki System Program ka transfer instruction keval
-        // signer accounts se kaam karta hai. PDA ke paas private key nahi
-        // hota, toh System Program ka transfer use nahi kar sakte directly.
-        //
-        // Instead, hum raw lamport manipulation karte hain:
-        // 1. Vault ke lamports se amount subtract karte hain
-        // 2. User ke lamports me amount add karte hain
-        //
-        // **vault.try_borrow_mut_lamports()? → vault ke lamports ka mutable
-        // reference lete hain. Solana runtime ensure karta hai ki total
-        // lamports conserved rahein ek transaction me.
-        //
-        // **redeemer.try_borrow_mut_lamports()? → same for user.
         // -------------------------------------------------------------------
-        // -------------------------------------------------------------------
-        // Step 2: SOL transfer — Vault → User
-        // -------------------------------------------------------------------
-        // Transfer SOL from Vault to Redeemer using CPI (Bypass Simulation Reverts)
-        let treasury_key = ctx.accounts.treasury.key();
+        let treasury_key = treasury.key();
         let seeds = &[b"vault", treasury_key.as_ref(), &[ctx.bumps.vault]];
         let signer = &[&seeds[..]];
 
@@ -1187,6 +1198,14 @@ pub mod polldotsol {
             signer,
         );
         system_program::transfer(cpi_context, sol_to_user)?;
+
+        // -------------------------------------------------------------------
+        // Update on-chain state: tokens_sold kam ho jaata hai
+        // -------------------------------------------------------------------
+        treasury.tokens_sold = treasury
+            .tokens_sold
+            .checked_sub(amount)
+            .ok_or(PollError::ArithmeticOverflow)?;
 
         // -------------------------------------------------------------------
         // TokensRedeemed event emit karte hain.

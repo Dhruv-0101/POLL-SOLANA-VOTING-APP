@@ -183,4 +183,9 @@ pub enum PollError {
     /// Withdraw amount zero nahi ho sakta.
     #[msg("Withdraw amount must be greater than zero")]
     InvalidWithdrawAmount,
+
+    /// Slippage tolerance exceed ho gayi — user ne jo max cost/min return
+    /// set kiya tha woh cross ho gaya.
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
 }

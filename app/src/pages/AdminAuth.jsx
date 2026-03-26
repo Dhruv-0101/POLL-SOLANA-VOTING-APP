@@ -15,9 +15,9 @@ const AdminAuth = () => {
     }
   }, [isAdminAuthenticated, navigate]);
 
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('adminn');
+  const [email, setEmail] = useState('adminn@gmail.com');
+  const [password, setPassword] = useState('adminn1');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
 

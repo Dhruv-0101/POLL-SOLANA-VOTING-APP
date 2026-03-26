@@ -60,10 +60,18 @@ pub struct Treasury {
     /// Bump stored karte hain taaki har baar recalculate na karna pade.
     pub vault_bump: u8, // 1 byte
 
-    /// 1 token ka price lamports me (1 SOL = 1,000,000,000 lamports).
-    /// Example: agar price = 100,000,000 toh 1 token = 0.1 SOL
-    /// Yeh admin set karta hai platform settings me.
-    pub token_price: u64, // 8 bytes
+    /// 1 token ka starting price lamports me (1 SOL = 1,000,000,000 lamports).
+    /// Isse 'a' kehte hain bonding curve formula me: P(x) = a + b * x.
+    pub base_price: u64, // 8 bytes
+
+    /// Price growth rate lamports me.
+    /// Har token sell hone pe price itna badh jaata hai.
+    /// Isse 'b' kehte hain formula me.
+    pub slope: u64, // 8 bytes
+
+    /// Ab tak total kitne tokens sell ho chuke hain bonding curve se.
+    /// Yeh 'x' hai formula me. Har buy pe badhta hai, sell pe kam hota hai.
+    pub tokens_sold: u64, // 8 bytes
 
     /// Proposal create karne ke liye kitne tokens chahiye (smallest unit me).
     /// Example: agar proposal_cost = 10,000,000 aur decimals = 6

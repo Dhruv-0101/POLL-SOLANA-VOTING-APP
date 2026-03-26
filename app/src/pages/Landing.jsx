@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight, Shield, Zap, Lock, BarChart, CheckCircle, RefreshCcw } from 'lucide-react';
 
 const Landing = () => {
@@ -55,12 +55,12 @@ const Landing = () => {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-          <button onClick={() => navigate('/app')} className="btn btn-primary" style={{ padding: '0.875rem 2rem', fontSize: '1.05rem' }}>
+          <Link to="/app" className="btn btn-primary" style={{ padding: '0.875rem 2rem', fontSize: '1.05rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <ArrowRight size={18} /> Enter App
-          </button>
-          <button onClick={() => navigate('/admin')} className="btn btn-outline" style={{ padding: '0.875rem 2rem', fontSize: '1.05rem' }}>
+          </Link>
+          <Link to="/admin" className="btn btn-outline" style={{ padding: '0.875rem 2rem', fontSize: '1.05rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Shield size={18} /> Admin Access
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -149,7 +149,7 @@ const Landing = () => {
             </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem' }}>Earn & Redeem</h3>
             <p className="text-dim text-sm" style={{ marginBottom: '1.5rem', lineHeight: '1.6' }}>
-              Creator earns all voting tokens. Redeem Tokens back for SOL at any time (minus 10% fee).
+              Creator earns all voting tokens. Redeem Tokens back for SOL at any time (minus dynamic fee).
             </p>
             <div className="pill">
               POLL → SOL
@@ -276,7 +276,7 @@ const Landing = () => {
                 <CheckCircle size={16} color="#eab308" style={{ marginTop: '3px' }}/> Used for POLL redemptions
               </li>
               <li style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', color: 'var(--text-dim)' }}>
-                <CheckCircle size={16} color="#eab308" style={{ marginTop: '3px' }}/> 10% fee on all transactions
+                <CheckCircle size={16} color="#eab308" style={{ marginTop: '3px' }}/> dynamic fee on all transactions
               </li>
             </ul>
           </div>

@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { 
   Shield, LogOut, Coins, BarChart3, Fingerprint, Settings, Zap, ArrowRight, 
-  CheckCircle, Upload, Image, RotateCcw
+  CheckCircle, RotateCcw, ChevronRight
 } from 'lucide-react';
 
 /* Solana / Anchor Imports */
@@ -23,7 +23,8 @@ const AdminDashboard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, connecting } = useWallet();
+  const isWalletLoading = connecting;
   const { connection } = useConnection();
   const anchorWallet = useAnchorWallet();
 
@@ -51,7 +52,7 @@ const AdminDashboard = () => {
     };
   }, []);
 
-  const [decimals, setDecimals] = useState(6);
+  const [decimals, setDecimals] = useState(() => Number(localStorage.getItem('tokenDecimals')) || 6);
   const [isCreating, setIsCreating] = useState(false);
 
   const [isTokenCreated, setIsTokenCreated] = useState(() => localStorage.getItem('isTokenCreated') === 'true');
@@ -73,12 +74,14 @@ const AdminDashboard = () => {
   const [totalMinted, setTotalMinted] = useState(() => Number(localStorage.getItem('totalMinted')) || 0);
 
   // Step 5 Settings State
-  const [tokenPrice, setTokenPrice] = useState(() => Number(localStorage.getItem('tokenPrice')) || 0.1);
+  const [basePrice, setBasePrice] = useState(() => Number(localStorage.getItem('basePrice')) || 0.1);
+  const [slope, setSlope] = useState(() => Number(localStorage.getItem('slope')) || 0.01);
   const [proposalCost, setProposalCost] = useState(() => Number(localStorage.getItem('proposalCost')) || 10);
   const [voteCost, setVoteCost] = useState(() => Number(localStorage.getItem('voteCost')) || 1);
-  const [feePercentage, setFeePercentage] = useState(() => Number(localStorage.getItem('feePercentage')) || 10);
+  const [feePercentage, setFeePercentage] = useState(() => Number(localStorage.getItem('feePercentage')) || 5);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSettingsSet, setIsSettingsSet] = useState(() => localStorage.getItem('isSettingsSet') === 'true');
+  const [tokensSold, setTokensSold] = useState(0);
 
   // Vault Management State
   const [vaultBalance, setVaultBalance] = useState(0);
@@ -146,6 +149,16 @@ const AdminDashboard = () => {
             );
             const ata = getAssociatedTokenAddressSync(mintPda, treasuryPda, true);
             
+            // Fetch Mint Info to sync decimals
+            const mintInfo = await connection.getParsedAccountInfo(mintPda);
+            if (mintInfo && mintInfo.value) {
+                const fetchedDecimals = mintInfo.value.data.parsed.info.decimals;
+                if (fetchedDecimals !== decimals) {
+                    setDecimals(fetchedDecimals);
+                    localStorage.setItem('tokenDecimals', fetchedDecimals);
+                }
+            }
+
             setTreasuryAta(ata.toBase58());
             localStorage.setItem('treasuryAta', ata.toBase58());
             
@@ -186,10 +199,8 @@ const AdminDashboard = () => {
                         setTokenSymbol(symbol);
                         localStorage.setItem('tokenSymbol', symbol);
                     }
-                    if (uri) {
-                        setTokenUri(uri);
-                        localStorage.setItem('tokenUri', uri);
-                    }
+                    // Stale URI update removed to prevent ReferenceError
+
                 } catch (parseErr) {
                     console.warn("Could not decode metadata buffer:", parseErr);
                 }
@@ -208,19 +219,23 @@ const AdminDashboard = () => {
             }
 
             // Fetch Platform Settings
-            if (treasuryAccount.tokenPrice.toNumber() > 0) {
-                const fetchedPrice = treasuryAccount.tokenPrice.toNumber() / 1e9; // SOL is 9 decimals
+            if (treasuryAccount.basePrice.toNumber() > 0) {
+                const fetchedBase = treasuryAccount.basePrice.toNumber() / 1e9; // SOL
+                const fetchedSlope = treasuryAccount.slope.toNumber() / 1e9;
                 const fetchedProposal = treasuryAccount.proposalCost.toNumber() / (10 ** decimals);
                 const fetchedVote = treasuryAccount.voteCost.toNumber() / (10 ** decimals);
                 const fetchedFee = treasuryAccount.feeBasisPoints / 100;
 
-                setTokenPrice(fetchedPrice);
+                setBasePrice(fetchedBase);
+                setSlope(fetchedSlope);
+                setTokensSold(treasuryAccount.tokensSold.toNumber() / (10 ** decimals));
                 setProposalCost(fetchedProposal);
                 setVoteCost(fetchedVote);
                 setFeePercentage(fetchedFee);
                 setIsSettingsSet(true);
                 localStorage.setItem('isSettingsSet', 'true');
-                localStorage.setItem('tokenPrice', fetchedPrice);
+                localStorage.setItem('basePrice', fetchedBase);
+                localStorage.setItem('slope', fetchedSlope);
                 localStorage.setItem('proposalCost', fetchedProposal);
                 localStorage.setItem('voteCost', fetchedVote);
                 localStorage.setItem('feePercentage', fetchedFee);
@@ -282,8 +297,10 @@ const AdminDashboard = () => {
         }
 
         // Fetch Platform Settings
-        if (treasuryAccount.tokenPrice.toNumber() > 0) {
-            setTokenPrice(treasuryAccount.tokenPrice.toNumber() / 1e9);
+        if (treasuryAccount.basePrice.toNumber() > 0) {
+            setBasePrice(treasuryAccount.basePrice.toNumber() / 1e9);
+            setSlope(treasuryAccount.slope.toNumber() / 1e9);
+            setTokensSold(treasuryAccount.tokensSold.toNumber() / (10 ** decimals));
             setProposalCost(treasuryAccount.proposalCost.toNumber() / (10 ** decimals));
             setVoteCost(treasuryAccount.voteCost.toNumber() / (10 ** decimals));
             setIsSettingsSet(true);
@@ -348,13 +365,19 @@ const AdminDashboard = () => {
       // Update Persistent Storage
       localStorage.setItem('isTokenCreated', 'true');
       localStorage.setItem('mintAddress', mintAddr);
+      localStorage.setItem('tokenDecimals', decimals);
       updateActiveStep(2); // Auto move to next step logic can be here too
       
     } catch (err) {
-      console.error("Create Token Error:", err);
       // Try to parse friendly error from Anchor, otherwise raw message
       let errMsg = err.message;
       if (err.msg) errMsg = err.msg; 
+      
+      if (err.logs) {
+         console.log("Transaction Logs:", err.logs);
+         appendLog(`Logs: ${err.logs[0]}...`, true);
+      }
+      
       appendLog(`Transaction Failed: ${errMsg}`, true);
     } finally {
       setIsCreating(false);
@@ -401,8 +424,12 @@ const AdminDashboard = () => {
       appendLog(`Derived ATA: ${treasuryTokenAccount.toBase58()}`);
       appendLog(`Derived Vault: ${vaultPda.toBase58()}`);
 
+      // Convert prices to Lamports
+      const basePriceBN = new BN(basePrice * 1e9);
+      const slopeBN = new BN(slope * 1e9);
+
       const txSignature = await program.methods
-          .initializeTreasury()
+          .initializeTreasury(basePriceBN, slopeBN)
           .accounts({
               admin: adminPubkey,
               treasury: treasuryPda,
@@ -426,6 +453,8 @@ const AdminDashboard = () => {
       localStorage.setItem('isTreasuryInit', 'true');
       localStorage.setItem('treasuryAta', ataAddr);
       localStorage.setItem('solVault', vaultAddr);
+      localStorage.setItem('basePrice', basePrice);
+      localStorage.setItem('slope', slope);
       updateActiveStep(3); // Move to next step (Metadata)
       
     } catch (err) {
@@ -565,8 +594,9 @@ const AdminDashboard = () => {
         }
       } catch (e) {
           // Fallback if indexer is slow
-          const manualTotal = totalMinted + mintAmount;
+          const manualTotal = Number(totalMinted) + Number(mintAmount);
           setTotalMinted(manualTotal);
+          localStorage.setItem('totalMinted', manualTotal);
       }
       
       // Re-fetch everything else in background
@@ -608,13 +638,14 @@ const AdminDashboard = () => {
         );
         
         // Convert to on-chain units
-        const priceBN = new BN(tokenPrice * 1e9); // SOL to Lamports
+        const basePriceBN = new BN(basePrice * 1e9);
+        const slopeBN = new BN(slope * 1e9);
         const propCostBN = new BN(proposalCost).mul(new BN(10).pow(new BN(decimals)));
         const voteCostBN = new BN(voteCost).mul(new BN(10).pow(new BN(decimals)));
         const feeBP = Math.round(feePercentage * 100);
 
         const txSignature = await program.methods
-            .updatePlatformSettings(priceBN, propCostBN, voteCostBN, feeBP)
+            .updatePlatformSettings(basePriceBN, slopeBN, propCostBN, voteCostBN, feeBP)
             .accounts({
                 admin: adminPubkey,
                 treasury: treasuryPda,
@@ -623,12 +654,13 @@ const AdminDashboard = () => {
             
         setIsSettingsSet(true);
         localStorage.setItem('isSettingsSet', 'true');
-        localStorage.setItem('tokenPrice', tokenPrice);
+        localStorage.setItem('basePrice', basePrice);
+        localStorage.setItem('slope', slope);
         localStorage.setItem('proposalCost', proposalCost);
         localStorage.setItem('voteCost', voteCost);
         localStorage.setItem('feePercentage', feePercentage);
 
-        appendLog(`Platform settings saved: ${tokenPrice} SOL/token, ${feePercentage}% fee! Tx: ${txSignature.substring(0,8)}...`);
+        appendLog(`Platform Settings saved!`);
         
         // Re-fetch
         setTimeout(manualRefresh, 1000);
@@ -637,7 +669,13 @@ const AdminDashboard = () => {
         console.error("Save Settings Error:", err);
         let errMsg = err.message;
         if (err.msg) errMsg = err.msg;
-        appendLog(`Settings Failed: ${errMsg}`, true);
+        
+        if (err.logs) {
+            console.log("Error Logs:", err.logs);
+            appendLog(`Error Logs found (check console)`);
+        }
+        
+        appendLog(`Save Settings Failed: ${errMsg}`, true);
       } finally {
         setIsSavingSettings(false);
       }
@@ -1061,30 +1099,54 @@ const AdminDashboard = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
                   {/* Decimals Field */}
                   <div>
-                    <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                      DECIMALS
+                    <label style={{
+                      display: 'block',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-dim)',
+                      marginBottom: '0.75rem',
+                      letterSpacing: '0.05em'
+                    }}>
+                      TOKEN DECIMALS
                     </label>
-                    <input 
-                      type="number" 
-                      value={decimals}
-                      onChange={(e) => setDecimals(Number(e.target.value))}
-                      disabled={isTokenCreated || isCreating}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0a0a0a',
-                        border: '1px solid var(--card-border)',
-                        borderRadius: '0.5rem',
-                        padding: '1rem',
-                        color: (isTokenCreated || isCreating) ? 'var(--text-dim)' : 'white',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '1rem',
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        cursor: (isTokenCreated || isCreating) ? 'not-allowed' : 'text'
-                      }}
-                      onFocus={(e) => { if(!isTokenCreated) e.target.style.borderColor = 'var(--text-dim)' }}
-                      onBlur={(e) => { if(!isTokenCreated) e.target.style.borderColor = 'var(--card-border)' }}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <select
+                        value={decimals}
+                        onChange={(e) => setDecimals(Number(e.target.value))}
+                        disabled={isTokenCreated || isWalletLoading}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: '0.5rem',
+                          padding: '1rem',
+                          color: 'white',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '1rem',
+                          outline: 'none',
+                          appearance: 'none',
+                          cursor: isTokenCreated ? 'not-allowed' : 'pointer',
+                          transition: 'border-color 0.2s',
+                          opacity: isTokenCreated ? 0.6 : 1
+                        }}
+                      >
+                        <option value={6}>6 Decimals (Standard)</option>
+                        <option value={9}>9 Decimals (High Precision)</option>
+                      </select>
+                      <div style={{
+                        position: 'absolute',
+                        right: '1rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        pointerEvents: 'none',
+                        color: 'var(--text-dim)'
+                      }}>
+                        <ChevronRight size={16} />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: isTokenCreated ? 'var(--accent-green)' : 'var(--text-dim)' }}>
+                      {isTokenCreated ? '// DECIMALS LOCKED ON-CHAIN' : '// 6 IS RECOMMENDED FOR MOST APPS'}
+                    </div>
                   </div>
 
                   {/* Token Program Field */}
@@ -1183,8 +1245,45 @@ const AdminDashboard = () => {
                   <div>
                     <div className="font-mono text-dim text-xs tracking-wide" style={{ marginBottom: '0.25rem' }}>STEP 02</div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Initialize Treasury</h2>
+                    <p className="text-dim text-sm" style={{ marginTop: '0.25rem' }}>Set initial token pricing parameters.</p>
                   </div>
                 </div>
+
+                {!isTreasuryInitialized && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+                    <div>
+                      <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        INITIAL PRICE (a)
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="number" 
+                          value={basePrice}
+                          onChange={(e) => setBasePrice(Number(e.target.value))}
+                          style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '0.5rem', padding: '1rem', color: 'white', fontFamily: 'var(--font-mono)', outline: 'none' }}
+                        />
+                        <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '0.8rem' }}>SOL</span>
+                      </div>
+                      <p className="text-dim" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>The very first token price in SOL</p>
+                    </div>
+
+                    <div>
+                      <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        GROWTH RATE (b / slope)
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="number" 
+                          value={slope}
+                          onChange={(e) => setSlope(Number(e.target.value))}
+                          style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '0.5rem', padding: '1rem', color: 'white', fontFamily: 'var(--font-mono)', outline: 'none' }}
+                        />
+                        <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '0.8rem' }}>SOL</span>
+                      </div>
+                      <p className="text-dim" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>Price increase per 1,000,000 tokens sold</p>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem', marginBottom: '2rem' }}>
                   {/* Token Vault Info */}
@@ -1546,21 +1645,62 @@ const AdminDashboard = () => {
 
                 {/* Grid Inputs */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
-                    {/* Token Price */}
+                    {/* Bonding Curve Display */}
+                    <div style={{ padding: '1.5rem', border: '1px solid var(--accent-green-border)', borderRadius: '0.5rem', backgroundColor: 'var(--accent-green-dim)', gridColumn: 'span 2' }}>
+                        <div className="font-mono text-xs tracking-wide uppercase" style={{ color: 'var(--accent-green)', marginBottom: '1rem' }}>ACTIVE BONDING CURVE STATUS</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                            <div>
+                                <div className="text-dim text-xs">Tokens Sold</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{tokensSold.toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-dim text-xs">Total Minted</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{totalMinted.toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-dim text-xs">Live Price</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent-green)' }}>
+                                    {(basePrice + slope * Math.floor(tokensSold / 1)).toFixed(5)} SOL
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                           Formula: P(x) = a + b * floor(x / 1M). Updating 'a' or 'b' will affect all future transactions immediately.
+                        </div>
+                    </div>
+
+                    {/* Base Price (a) */}
                     <div>
                         <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                            TOKEN PRICE (SOL)
+                            INITIAL PRICE (a)
                         </label>
                         <div style={{ position: 'relative' }}>
                             <input 
                                 type="number" 
-                                value={tokenPrice}
-                                onChange={(e) => setTokenPrice(Number(e.target.value))}
+                                value={basePrice}
+                                onChange={(e) => setBasePrice(Number(e.target.value))}
                                 style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '0.5rem', padding: '1rem', color: 'white', fontFamily: 'var(--font-mono)', outline: 'none' }}
                             />
                             <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '0.8rem' }}>SOL</span>
                         </div>
-                        <p className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Cost per {tokenSymbol} token</p>
+                        <p className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Starting price at zero curve</p>
+                    </div>
+
+                    {/* Slope (b) */}
+                    <div>
+                        <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                            GROWTH RATE (b)
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <input 
+                                type="number" 
+                                value={slope}
+                                onChange={(e) => setSlope(Number(e.target.value))}
+                                style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '0.5rem', padding: '1rem', color: 'white', fontFamily: 'var(--font-mono)', outline: 'none' }}
+                            />
+                            <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '0.8rem' }}>SOL</span>
+                        </div>
+                        <p className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Price increase per 1M tokens</p>
                     </div>
 
                     {/* Proposal Cost */}
@@ -1598,7 +1738,7 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Fee Basis Points */}
-                    <div>
+                    <div style={{ gridColumn: 'span 2' }}>
                         <label className="font-mono text-dim text-xs tracking-wide uppercase" style={{ display: 'block', marginBottom: '0.5rem' }}>
                             PLATFORM FEE (%)
                         </label>
@@ -1611,7 +1751,7 @@ const AdminDashboard = () => {
                             />
                             <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '0.8rem' }}>%</span>
                         </div>
-                        <p className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Fee on all transactions</p>
+                        <p className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Fee applied to all Buy/Redeem transactions on the platform.</p>
                     </div>
                 </div>
 
@@ -1623,23 +1763,24 @@ const AdminDashboard = () => {
                     padding: '1.25rem',
                     marginBottom: '2rem'
                 }}>
-                    <div className="font-mono text-xs text-dim uppercase" style={{ marginBottom: '1rem' }}>Pricing Preview</div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--text-dim)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div>Buy 10 tokens: <span style={{ color: 'white' }}>{(10 * tokenPrice).toFixed(1)} SOL</span> + <span style={{ color: 'var(--accent-green)' }}>{(10 * tokenPrice * (feePercentage/100)).toFixed(3)} SOL fee</span> = <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>{(10 * tokenPrice * (1 + feePercentage/100)).toFixed(3)} SOL total</span></div>
-                        <div>Redeem 10 tokens: <span style={{ color: 'white' }}>{(10 * tokenPrice * (1 - feePercentage/100)).toFixed(3)} SOL</span> (after {feePercentage}% fee)</div>
+                    <div className="font-mono text-xs text-dim uppercase" style={{ marginBottom: '1rem' }}>Economics Summary</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <div>Current Market Price: <span style={{ color: 'white', fontWeight: 700 }}>{(basePrice + slope * Math.floor(tokensSold / 1)).toFixed(5)} SOL</span></div>
+                        <div>Platform Fee: <span style={{ color: 'white' }}>{feePercentage}% on all buy/sell transactions.</span></div>
+                        <div>Creator Earnings: <span style={{ color: 'white' }}>Creators receive 100% of tokens locked for voting on their successful proposals.</span></div>
                     </div>
                 </div>
 
                 {/* State based Action Area */}
                 {isSettingsSet ? (
-                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                       <div style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                           <CheckCircle size={18} /> Platform is LIVE – All steps complete!
-                       </div>
-                       {/* <button onClick={handleSaveSettings} disabled={isSavingSettings} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                          [ Update Settings ]
-                       </button> */}
-                   </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                            <CheckCircle size={18} /> Platform is LIVE – All steps complete!
+                        </div>
+                        <button onClick={handleSaveSettings} disabled={isSavingSettings} style={{ backgroundColor: 'transparent', border: '1px solid var(--accent-green-border)', color: 'var(--accent-green)', borderRadius: '0.375rem', padding: '0.4rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                           [ UPDATE SETTINGS ]
+                        </button>
+                    </div>
                 ) : (
                   <button onClick={handleSaveSettings} disabled={isSavingSettings || !isTreasuryInitialized} className="btn btn-primary" style={{ padding: '0.875rem 2.5rem', opacity: (isSavingSettings || !isTreasuryInitialized) ? 0.7 : 1 }}>
                     <Zap size={18} /> {isSavingSettings ? 'SAVING...' : 'SAVE SETTINGS'}

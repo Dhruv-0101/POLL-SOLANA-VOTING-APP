@@ -44,6 +44,7 @@ use crate::state::*;
 // - rent: Rent exemption check ke liye
 // ============================================================================
 #[derive(Accounts)]
+#[instruction(decimals: u8)]
 pub struct CreateToken<'info> {
     /// Admin ka wallet — yeh sign karega aur rent pay karega.
     /// `mut` kyunki SOL deduct hoga (account creation rent ke liye).
@@ -55,18 +56,15 @@ pub struct CreateToken<'info> {
     ///
     /// `init` = naya account create karega
     /// `payer = admin` = admin rent pay karega
-    /// `mint::decimals = 6` = 6 decimal places (1 token = 1,000,000 smallest units)
+    /// `mint::decimals = decimals` = User-provided decimals (passed via instruction)
     /// `mint::authority = treasury` = treasury hi tokens mint kar sakti hai
     #[account(
         init,
         payer = admin,
         seeds = [b"mint", admin.key().as_ref()],
         bump,
-        mint::decimals = 6,
+        mint::decimals = decimals,
         // Yaha par 'mint::authority' humne 'treasury' PDA ko di hai.
-        // Iska matlab admin personally apne wallet se tokens mint nahi kar sakta.
-        // Tokens sirf is smart contract ke through, program rules follow 
-        // karke hi mint ho sakte hain. Ye security ke liye bahot zaroori hai.
         mint::authority = treasury,
     )]
     pub mint: Account<'info, Mint>,
@@ -112,6 +110,7 @@ pub struct CreateToken<'info> {
 // Yeh step token create ke BAAD hota hai kyunki mint ka address chahiye.
 // ============================================================================
 #[derive(Accounts)]
+#[instruction(base_price: u64, slope: u64)]
 pub struct InitializeTreasury<'info> {
     /// Admin ka wallet — signer + payer.
     #[account(mut)]
@@ -137,12 +136,6 @@ pub struct InitializeTreasury<'info> {
     pub mint: Account<'info, Mint>,
 
     /// Treasury ka Token Account — yaha pe sare tokens store honge.
-    /// `init` = naya create hoga
-    /// `associated_token::mint = mint` = is mint ke tokens store karega
-    /// `associated_token::authority = treasury` = treasury own karega
-    ///
-    /// Associated Token Account (ATA) Solana ka standard hai — har wallet
-    /// ke liye har token ka ek deterministic address hota hai.
     #[account(
         init,
         payer = admin,
@@ -152,16 +145,6 @@ pub struct InitializeTreasury<'info> {
     pub treasury_token_account: Account<'info, TokenAccount>,
 
     /// SOL Vault — ek PDA jo SOL store karta hai.
-    /// Jab users tokens buy karte hain → SOL yaha aata hai.
-    /// Jab users tokens redeem karte hain → SOL yaha se jaata hai.
-    ///
-    /// `seeds = ["vault", treasury.key()]` — treasury se linked hai.
-    /// `init` = pehli baar create ho raha hai.
-    /// `space = 0` = koi data store nahi karta, sirf SOL hold karta hai.
-    ///
-    /// NOTE: "space = 0" means sirf 8 bytes discriminator ke liye nahi hai,
-    /// SystemAccount hai toh koi data nahi — sirf lamports hold karta hai.
-    /// CHECK: This is a PDA used as a SOL vault, no data is stored.
     #[account(
         mut,
         seeds = [b"vault", treasury.key().as_ref()],

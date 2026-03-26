@@ -28,16 +28,19 @@ const UserApp = () => {
     });
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Blockchain State
+    // Blockchain State (Updated Dynamically from Treasury)
     const [pollBalance, setPollBalance] = useState(0);
     const [solBalance, setSolBalance] = useState(0);
     const [vaultBalance, setVaultBalance] = useState(0);
-    const [tokenPrice, setTokenPrice] = useState(0.1);
-    const [feePercentage, setFeePercentage] = useState(10);
+    const [basePrice, setBasePrice] = useState(0);
+    const [slope, setSlope] = useState(0);
+    const [tokensSold, setTokensSold] = useState(0);
+    const [feePercentage, setFeePercentage] = useState(0);
     const [tokenSymbol, setTokenSymbol] = useState("TOKEN");
-    const [decimals, setDecimals] = useState(6);
-    const [proposalCost, setProposalCost] = useState(10);
-    const [voteCost, setVoteCost] = useState(1);
+    const [decimals, setDecimals] = useState(() => Number(localStorage.getItem('tokenDecimals')) || 6);
+    const [proposalCost, setProposalCost] = useState(0);
+    const [voteCost, setVoteCost] = useState(0);
+    const [slippage, setSlippage] = useState(1); // 1% fallback
 
     // Buy Tokens State
     const [buyAmount, setBuyAmount] = useState(10);
@@ -76,9 +79,9 @@ const UserApp = () => {
         setLogs(prev => [{ time, message, error }, ...prev]);
     };
 
-    // The main Platform Admin (Hardcoded for this deployment)
-    const ADMIN_PUBKEY = new PublicKey("HYbmZrLu6ve9buQa7NkHNXmvgZeCfv8c5ryhwRV7JYEG");
-    const [adminPubkey] = useState(ADMIN_PUBKEY);
+    // The main Platform Admin (Hardcoded default, but updated dynamically if treasury is found)
+    const ADMIN_PUBKEY = new PublicKey("DGdVqMmRbK816G6Dz4PD9LBh9erXoga2uJJYdGzzebeX");
+    const [adminPubkey, setAdminPubkey] = useState(ADMIN_PUBKEY);
 
     const fetchProgramState = async () => {
         if (!anchorWallet) return;
@@ -88,22 +91,45 @@ const UserApp = () => {
             const provider = new AnchorProvider(connection, anchorWallet, { preflightCommitment: "confirmed" });
             const program = new Program(idl, provider);
             
-            // Calculate Treasury PDA
-            const [treasuryPda] = PublicKey.findProgramAddressSync(
-                [new TextEncoder().encode("treasury"), adminPubkey.toBytes()],
-                program.programId
-            );
+            // Dynamic Fetch: Search for the first treasury on the program
+            const allTreasuries = await program.account.treasury.all();
+            if (allTreasuries.length === 0) {
+                appendLog("Error: No Treasury found. Admin must setup first!", true);
+                setIsRefreshing(false);
+                return;
+            }
 
-            // Fetch Treasury Data
-            const treasuryState = await program.account.treasury.fetch(treasuryPda);
-            setTokenPrice(treasuryState.tokenPrice.toNumber() / 1e9);
+            const treasuryState = allTreasuries[0].account;
+            const treasuryPda = allTreasuries[0].publicKey;
+            
+            console.log("--- DYNAMIC CONFIG FETCHED ---");
+            console.log("Treasury Admin:", treasuryState.admin.toString());
+            console.log("Platform Fee (%):", treasuryState.feeBasisPoints / 100);
+            console.log("------------------------------");
+
+            // Set Admin from fetched data
+            setAdminPubkey(treasuryState.admin);
+
+            // Fetch Mint Decimals
+            const mintPda = treasuryState.mint;
+            const mintInfo = await connection.getParsedAccountInfo(mintPda);
+            let activeDecimals = decimals;
+            if (mintInfo?.value) {
+                activeDecimals = mintInfo.value.data.parsed.info.decimals;
+                setDecimals(activeDecimals);
+                localStorage.setItem('tokenDecimals', activeDecimals);
+            }
+            
+            const divider = new BN(10).pow(new BN(activeDecimals));
+
+            setBasePrice(treasuryState.basePrice.toNumber() / 1e9);
+            setSlope(treasuryState.slope.toNumber() / 1e9);
+            setTokensSold(treasuryState.tokensSold.toNumber() / divider.toNumber());
             setFeePercentage(treasuryState.feeBasisPoints / 100);
-            setProposalCost(treasuryState.proposalCost.toNumber() / (10 ** 6)); 
-            setVoteCost(treasuryState.voteCost.toNumber() / (10 ** 6)); 
+            setProposalCost(treasuryState.proposalCost.toNumber() / divider.toNumber()); 
+            setVoteCost(treasuryState.voteCost.toNumber() / divider.toNumber()); 
             
-            // Decimals is stored on the Mint account, but user confirmed it's 6.
-            setDecimals(6); 
-            
+            // Fixed decimals overwrite removed to support dynamic mints.
             // Fetch All Proposals
             const allProps = await program.account.proposal.all();
             // Sort by latest first
@@ -194,6 +220,57 @@ const UserApp = () => {
         }
     }, [anchorWallet]);
 
+    // BONDING CURVE CALCULATION HELPERS
+    const calculateCost = (amount, currentSold, base, slp) => {
+        if (!amount || amount <= 0) return 0;
+        let totalCost = 0;
+        let remaining = amount;
+        let x = currentSold;
+
+        // Loop through boundaries
+        while (remaining > 0) {
+            let nextBoundary = Math.floor(x + 1e-9) + 1;
+            let availableInBatch = nextBoundary - x;
+            let take = Math.min(remaining, availableInBatch);
+
+            if (take <= 0) break;
+
+            let price = base + slp * Math.floor(x + 1e-9);
+            totalCost += take * price;
+
+            remaining -= take;
+            x += take;
+            
+            // Safety break for extremely large loops
+            if (x > currentSold + 100000) break; 
+        }
+        return totalCost;
+    };
+
+    const calculateRefund = (amount, currentSold, base, slp) => {
+        if (!amount || amount <= 0 || currentSold <= 0) return 0;
+        let totalRefund = 0;
+        let remaining = Math.min(amount, currentSold);
+        let x = currentSold;
+
+        while (remaining > 0 && x > 0) {
+            let prevBoundary = Math.ceil(x - 1e-9) - 1;
+            let availableInBatch = x - Math.max(0, prevBoundary);
+            let take = Math.min(remaining, availableInBatch);
+
+            if (take <= 0) break;
+
+            let price = base + slp * Math.floor(x - 1e-9);
+            totalRefund += take * price;
+
+            remaining -= take;
+            x -= take;
+        }
+        return totalRefund;
+    };
+
+    const livePrice = basePrice + slope * Math.floor(tokensSold / 1);
+
     // BUY TOKENS Logic
     const handleBuyTokens = async () => {
         if (!anchorWallet) {
@@ -209,7 +286,7 @@ const UserApp = () => {
         console.log("Admin Pubkey:", adminPubkey.toString());
         console.log("Buy Amount (Human):", buyAmount);
         console.log("Token Decimals:", decimals);
-        console.log("Token Price (SOL):", tokenPrice);
+        console.log("Live Price (SOL):", livePrice);
         console.log("Fee Percentage:", feePercentage);
 
         try {
@@ -240,11 +317,18 @@ const UserApp = () => {
             console.log("User Token Account:", userTokenAccount.toString());
 
             const amountBN = new BN(buyAmount).mul(new BN(10).pow(new BN(decimals)));
+            
+            // Calculate Max Cost with Slippage
+            const calculatedCost = calculateCost(buyAmount, tokensSold, basePrice, slope);
+            const totalWithFee = calculatedCost * (1 + feePercentage / 100);
+            const maxCostLamports = new BN(Math.floor(totalWithFee * (1 + slippage / 100) * 1e9));
+
             console.log("Amount in Smallest Units (BN):", amountBN.toString());
+            console.log("Max Cost (Lamports):", maxCostLamports.toString());
 
             console.log("Sending transaction...");
             const tx = await program.methods
-                .buyTokens(amountBN)
+                .buyTokens(amountBN, maxCostLamports)
                 .accounts({
                     buyer: anchorWallet.publicKey,
                     treasury: treasuryPda,
@@ -505,9 +589,8 @@ const UserApp = () => {
         console.log("--- REDEEM TOKEN DEBUG START ---");
         console.log("Redeemer Wallet:", anchorWallet.publicKey.toString());
         console.log("Redeem Amount (Human):", redeemAmount);
-        console.log("Token Price:", tokenPrice);
+        console.log("Live Price:", livePrice);
         console.log("Vault Balance (SOL):", vaultBalance);
-        console.log("Net SOL expected:", redeemNet);
 
         const amountRaw = Math.floor(redeemAmount * (10 ** decimals));
         console.log("Amount Raw (BN):", amountRaw);
@@ -522,7 +605,11 @@ const UserApp = () => {
             return;
         }
 
-        if (vaultBalance < redeemNet) {
+        const calculatedRefund = calculateRefund(redeemAmount, tokensSold, basePrice, slope);
+        const netRefund = calculatedRefund * (1 - feePercentage / 100);
+        const minReturnLamports = new BN(Math.floor(netRefund * (1 - slippage / 100) * 1e9));
+
+        if (vaultBalance < netRefund) {
             appendLog(`Error: Vault has insufficient SOL (${vaultBalance.toFixed(4)} SOL). Please wait for more token purchases!`, true);
             return;
         }
@@ -569,7 +656,7 @@ const UserApp = () => {
             }
 
             const tx = await program.methods
-                .redeemTokens(new BN(amountRaw))
+                .redeemTokens(new BN(amountRaw), minReturnLamports)
                 .accounts({
                     redeemer: anchorWallet.publicKey,
                     treasury: treasuryPda,
@@ -609,15 +696,15 @@ const UserApp = () => {
         setOptions(newOptions);
     };
 
-    // UI Calculations
-    const subtotal = buyAmount * tokenPrice;
-    const fee = (subtotal * feePercentage) / 100;
-    const total = subtotal + fee;
+    // UI Calculations (Matching Batch Logic)
+    const currentCost = calculateCost(buyAmount, tokensSold, basePrice, slope);
+    const buyFee = (currentCost * feePercentage) / 100;
+    const buyTotal = currentCost + buyFee;
 
     // Redeem Calculations
-    const redeemValue = redeemAmount * tokenPrice;
-    const redeemFee = (redeemValue * feePercentage) / 100;
-    const redeemNet = redeemValue - redeemFee;
+    const currentRefund = calculateRefund(redeemAmount, tokensSold, basePrice, slope);
+    const redeemFee = (currentRefund * feePercentage) / 100;
+    const redeemNet = currentRefund - redeemFee;
 
     // Stats
     const totalEarned = anchorWallet 
@@ -789,21 +876,30 @@ const UserApp = () => {
                                 }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span className="text-dim font-mono text-sm">Token Price</span>
-                                            <span style={{ fontWeight: 600 }}>{tokenPrice} SOL / {tokenSymbol}</span>
+                                            <span className="text-dim font-mono text-sm">Target Price</span>
+                                            <span style={{ fontWeight: 600 }}>{livePrice.toFixed(5)} SOL / {tokenSymbol}</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span className="text-dim font-mono text-sm">Subtotal</span>
-                                            <span style={{ fontWeight: 600 }}>{subtotal.toFixed(3)} SOL</span>
+                                            <span className="text-dim font-mono text-sm">Subtotal (Bonding Curve)</span>
+                                            <span style={{ fontWeight: 600 }}>{currentCost.toFixed(5)} SOL</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span className="text-dim font-mono text-sm">Fee ({feePercentage}%)</span>
-                                            <span style={{ fontWeight: 600 }}>{fee.toFixed(3)} SOL</span>
+                                            <span className="text-dim font-mono text-sm">Platform Fee ({feePercentage}%)</span>
+                                            <span style={{ fontWeight: 600 }}>{buyFee.toFixed(5)} SOL</span>
                                         </div>
-                                        <div style={{ height: '1px', backgroundColor: 'var(--card-border)', margin: '0.5rem 0' }}></div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>Total</span>
-                                            <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--accent-green)' }}>{total.toFixed(3)} SOL</span>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #1a1a1a', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                                            <span style={{ fontWeight: 700 }}>Total Cost</span>
+                                            <span style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: '1.25rem' }}>{buyTotal.toFixed(5)} SOL</span>
+                                        </div>
+                                        <div style={{ marginTop: '1rem' }}>
+                                            <label className="font-mono text-dim text-xs uppercase mb-2 block">Slippage Tolerance (%)</label>
+                                            <input 
+                                                type="number" 
+                                                value={slippage}
+                                                onChange={(e) => setSlippage(Number(e.target.value))}
+                                                style={{ width: '60px', backgroundColor: '#111', border: '1px solid var(--card-border)', borderRadius: '4px', padding: '0.25rem 0.5rem', color: 'white', fontFamily: 'var(--font-mono)' }}
+                                            />
+                                            <span className="text-dim text-xs ml-2">Recommended: 0.5% - 1%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1165,17 +1261,21 @@ const UserApp = () => {
                                 <div style={{ backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span className="text-dim font-mono text-sm">Token Value</span>
-                                            <span style={{ fontWeight: 600 }}>{redeemValue.toFixed(3)} SOL</span>
+                                            <span className="text-dim font-mono text-sm">Target Price</span>
+                                            <span style={{ fontWeight: 600 }}>{livePrice.toFixed(5)} SOL</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span className="text-dim font-mono text-sm">Fee (10%)</span>
-                                            <span style={{ fontWeight: 600, color: '#ef4444' }}>-{redeemFee.toFixed(3)} SOL</span>
+                                            <span className="text-dim font-mono text-sm">Redeem Value (Bonding Curve)</span>
+                                            <span style={{ fontWeight: 600 }}>{currentRefund.toFixed(5)} SOL</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span className="text-dim font-mono text-sm">Platform Fee ({feePercentage}%)</span>
+                                            <span style={{ fontWeight: 600, color: '#ef4444' }}>-{redeemFee.toFixed(5)} SOL</span>
                                         </div>
                                         <div style={{ height: '1px', backgroundColor: 'var(--card-border)', margin: '0.5rem 0' }}></div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ fontWeight: 800 }}>You Receive</span>
-                                            <span style={{ fontWeight: 800, color: 'var(--accent-green)' }}>{redeemNet.toFixed(3)} SOL</span>
+                                            <span style={{ fontWeight: 800 }}>You Receive (Est.)</span>
+                                            <span style={{ fontWeight: 800, color: 'var(--accent-green)' }}>{redeemNet.toFixed(5)} SOL</span>
                                         </div>
                                     </div>
                                 </div>
