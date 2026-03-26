@@ -793,3 +793,93 @@ pub struct JoinGamePool<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
+
+// ============================================================================
+// 12. PLAY JACKPOT CONTEXT (Exact Match Jackpot)
+// ============================================================================
+// User jackpot game khelta hai:
+// 1. Bet tokens user se → escrow me lock
+// 2. System random number generate karta hai
+// 3. Win hone pe: treasury tokens → user; escrow → treasury
+// 4. Loss hone pe: escrow tokens → treasury
+//
+// GameCounter reuse karte hain jackpot ke liye bhi
+// (seeds "jackpot_counter" se alag rakhte hain)
+// ============================================================================
+#[derive(Accounts)]
+pub struct PlayJackpot<'info> {
+    /// Game khelne wala user.
+    #[account(mut)]
+    pub player: Signer<'info>,
+
+    /// Treasury — payout ke liye token account aur admin info ke liye.
+    #[account(
+        mut,
+        seeds = [b"treasury", treasury.admin.as_ref()],
+        bump,
+    )]
+    pub treasury: Account<'info, Treasury>,
+
+    /// Token Mint.
+    #[account(
+        seeds = [b"mint", treasury.admin.as_ref()],
+        bump,
+    )]
+    pub mint: Account<'info, Mint>,
+
+    /// Jackpot Counter — unique game ID generate karne ke liye.
+    #[account(
+        init_if_needed,
+        payer = player,
+        seeds = [b"jackpot_counter", treasury.key().as_ref()],
+        bump,
+        space = 8 + GameCounter::INIT_SPACE,
+    )]
+    pub jackpot_counter: Account<'info, GameCounter>,
+
+    /// JackpotGame account — is game ka pura state yaha store hoga.
+    #[account(
+        init,
+        payer = player,
+        seeds = [
+            b"jackpot_game",
+            treasury.key().as_ref(),
+            jackpot_counter.count.to_le_bytes().as_ref()
+        ],
+        bump,
+        space = 8 + JackpotGame::INIT_SPACE,
+    )]
+    pub jackpot_game: Account<'info, JackpotGame>,
+
+    /// Jackpot Escrow — bet tokens yaha temporarily lock honge.
+    #[account(
+        init,
+        payer = player,
+        seeds = [b"jackpot_escrow", jackpot_game.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = jackpot_game,
+    )]
+    pub jackpot_escrow: Account<'info, TokenAccount>,
+
+    /// Player ka token account — bet yaha se katega, win pe yaha milega.
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = player,
+    )]
+    pub player_token_account: Account<'info, TokenAccount>,
+
+    /// Treasury ka token account — win pe yaha se payout hoga.
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
+}

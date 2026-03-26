@@ -3,7 +3,7 @@ import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { 
   Coins, BarChart3, Fingerprint, Settings, Zap, ArrowRight, CheckCircle, 
-  RotateCcw, LayoutDashboard, FilePlus, Vote, TrendingUp, Wallet, Users
+  RotateCcw, LayoutDashboard, FilePlus, Vote, TrendingUp, Wallet, Users, Dices, Trophy
 } from 'lucide-react';
 import { 
   Program, AnchorProvider, BN 
@@ -51,6 +51,14 @@ const UserApp = () => {
     const [gameIdInput, setGameIdInput] = useState("");
     const [isFlipping, setIsFlipping] = useState(false);
     const [lastGameResult, setLastGameResult] = useState(null);
+
+    // --- Exact Match Jackpot State ---
+    const [jackpotRange, setJackpotRange] = useState(5);
+    const [jackpotNumber, setJackpotNumber] = useState(1);
+    const [jackpotBet, setJackpotBet] = useState(10);
+    const [isPlayingJackpot, setIsPlayingJackpot] = useState(false);
+    const [isJackpotRolling, setIsJackpotRolling] = useState(false);
+    const [jackpotResult, setJackpotResult] = useState(null);
 
     // Buy Tokens State
     const [buyAmount, setBuyAmount] = useState(10);
@@ -899,6 +907,122 @@ const UserApp = () => {
         }
     };
 
+    // --- EXACT MATCH JACKPOT ---
+    const handlePlayJackpot = async () => {
+        if (!anchorWallet) return;
+
+        if (jackpotNumber < 1 || jackpotNumber > jackpotRange) {
+            appendLog(`Chosen number must be between 1 and ${jackpotRange}!`, true);
+            return;
+        }
+
+        if (pollBalance < jackpotBet) {
+            appendLog(`Insufficient ${tokenSymbol} for bet!`, true);
+            return;
+        }
+
+        setIsPlayingJackpot(true);
+        appendLog(`Playing Exact Match ${jackpotRange}x Jackpot...`);
+
+        try {
+            const provider = new AnchorProvider(connection, anchorWallet, { preflightCommitment: "confirmed" });
+            const program = new Program(idl, provider);
+            
+            const allTreasuries = await program.account.treasury.all();
+            const treasuryState = allTreasuries[0].account;
+            const treasuryPda = allTreasuries[0].publicKey;
+            const mintPda = treasuryState.mint;
+
+            const [jackpotCounterPda] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("jackpot_counter"), treasuryPda.toBytes()],
+                program.programId
+            );
+
+            let currentCount = 0;
+            try {
+                const counterAccount = await program.account.gameCounter.fetch(jackpotCounterPda);
+                currentCount = counterAccount.count.toNumber();
+            } catch (err) {
+                // Not initialized yet
+            }
+
+            const countBuffer = new BN(currentCount).toArrayLike(Buffer, "le", 8);
+
+            const [jackpotGamePda] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("jackpot_game"), treasuryPda.toBytes(), countBuffer],
+                program.programId
+            );
+
+            const [jackpotEscrowPda] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("jackpot_escrow"), jackpotGamePda.toBytes()],
+                program.programId
+            );
+
+            const playerTokenAccount = getAssociatedTokenAddressSync(mintPda, anchorWallet.publicKey);
+            const treasuryTokenAccount = getAssociatedTokenAddressSync(mintPda, treasuryPda, true);
+
+            const betAmountBaseUnit = new BN(jackpotBet * (10 ** decimals));
+            const rangeMaxBaseUnit = new BN(jackpotRange);
+            const chosenNumberBaseUnit = new BN(jackpotNumber);
+
+            const tx = await program.methods
+                .playJackpot(betAmountBaseUnit, rangeMaxBaseUnit, chosenNumberBaseUnit)
+                .accounts({
+                    player: anchorWallet.publicKey,
+                    treasury: treasuryPda,
+                    mint: mintPda,
+                    jackpotCounter: jackpotCounterPda,
+                    jackpotGame: jackpotGamePda,
+                    jackpotEscrow: jackpotEscrowPda,
+                    playerTokenAccount: playerTokenAccount,
+                    treasuryTokenAccount: treasuryTokenAccount,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    rent: SYSVAR_RENT_PUBKEY,
+                })
+                .rpc();
+
+            // Setup Rolling animation
+            setIsJackpotRolling(true);
+            setJackpotResult(null);
+
+            setTimeout(async () => {
+                try {
+                    const gameInfo = await program.account.jackpotGame.fetch(jackpotGamePda);
+                    
+                    setIsJackpotRolling(false);
+                    setIsPlayingJackpot(false); // Enable buttons
+
+                    const isWin = gameInfo.isWin;
+                    const winningReward = (jackpotBet * jackpotRange);
+                    
+                    setJackpotResult({
+                        win: isWin,
+                        generated: gameInfo.generatedNumber.toNumber(),
+                        reward: isWin ? winningReward : 0
+                    });
+
+                    if (isWin) {
+                        setTotalEarned(prev => prev + winningReward);
+                    }
+
+                    appendLog(`Jackpot Resolved: You ${isWin ? 'WON!' : 'LOST!'} System Rolled: ${gameInfo.generatedNumber.toNumber()}`);
+                    fetchProgramState();
+                } catch (fetchErr) {
+                    console.error("Failed to fetch jackpot game info", fetchErr);
+                    setIsJackpotRolling(false);
+                    setIsPlayingJackpot(false);
+                }
+            }, 3000);
+
+        } catch (err) {
+            console.error("Jackpot Error:", err);
+            appendLog(`Jackpot Error: ${err.message}`, true);
+            setIsPlayingJackpot(false);
+        }
+    };
+
     // --- DERIVED UI STATE ---
     const livePrice = basePrice + (slope * tokensSold);
     
@@ -986,6 +1110,7 @@ const UserApp = () => {
                             { id: 'create', icon: <FilePlus size={18} />, label: 'Create Proposal' },
                             { id: 'vote', icon: <Vote size={18} />, label: 'Vote' },
                             { id: 'game', icon: <Coins size={18} />, label: 'Flip a Coin' },
+                            { id: 'jackpot', icon: <Dices size={18} />, label: 'Exact Match' },
                             { id: 'earnings', icon: <TrendingUp size={18} />, label: 'Earnings & Redeem' }
                         ].map(item => (
                             <button
@@ -1522,6 +1647,164 @@ const UserApp = () => {
                             </div>
                         </div>
                     )}
+                    {activeTab === 'jackpot' && (
+                        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            <div className="card glass-panel rainbow-glow" style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, rgba(20,20,20,0.9) 0%, rgba(30,30,30,0.9) 100%)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <div style={{ color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '0.6rem', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                        <Dices size={28} />
+                                    </div>
+                                    <div>
+                                        <h2 style={{ fontSize: '1.75rem', fontWeight: 900, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fff' }}>Exact Match Jackpot</h2>
+                                        <p className="text-dim text-sm font-mono">// High Stakes Casino</p>
+                                    </div>
+                                </div>
+                                <div className="badge" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 800 }}>
+                                    PAYOUT: {jackpotRange}x BET
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem' }}>
+                                {/* CONTROLS SECTION */}
+                                <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+                                    <div style={{ position: 'absolute', top: '-50px', right: '-50px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(239,68,68,0.1) 0%, transparent 70%)', borderRadius: '50%' }}></div>
+                                    
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, borderBottom: '1px solid var(--card-border)', paddingBottom: '1rem', margin: 0 }}>Place Your Bet</h3>
+                                    
+                                    {/* Range Selector */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                            <label className="text-dim font-mono text-xs uppercase">1. Set Range (1 to N)</label>
+                                            <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 700 }}>1 to {jackpotRange}</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="2" max="1000" 
+                                            value={jackpotRange}
+                                            onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setJackpotRange(val);
+                                                if (jackpotNumber > val) setJackpotNumber(val);
+                                            }}
+                                            style={{ width: '100%', accentColor: '#ef4444', height: '6px', backgroundColor: '#333', borderRadius: '3px', outline: 'none' }}
+                                        />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#666', marginTop: '0.5rem', fontFamily: 'var(--font-mono)' }}>
+                                            <span>Easy (2)</span>
+                                            <span>Max Payout (1000)</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Number Selector */}
+                                    <div>
+                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">2. Choose Your Number</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '0.5rem' }}>
+                                            <button onClick={() => setJackpotNumber(Math.max(1, jackpotNumber - 1))} style={{ padding: '0.5rem 1rem', background: '#111', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', fontWeight: 800 }}>-</button>
+                                            <input 
+                                                type="number" 
+                                                value={jackpotNumber}
+                                                onChange={(e) => {
+                                                    let val = parseInt(e.target.value);
+                                                    if (isNaN(val)) val = 1;
+                                                    if (val < 1) val = 1;
+                                                    if (val > jackpotRange) val = jackpotRange;
+                                                    setJackpotNumber(val);
+                                                }}
+                                                style={{ flex: 1, backgroundColor: 'transparent', border: 'none', textAlign: 'center', fontSize: '1.25rem', color: 'white', fontWeight: 800, outline: 'none' }}
+                                            />
+                                            <button onClick={() => setJackpotNumber(Math.min(jackpotRange, jackpotNumber + 1))} style={{ padding: '0.5rem 1rem', background: '#111', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', fontWeight: 800 }}>+</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Bet Selector */}
+                                    <div>
+                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">3. Bet Amount ({tokenSymbol})</label>
+                                        <input 
+                                            type="number" 
+                                            value={jackpotBet}
+                                            onChange={(e) => setJackpotBet(Number(e.target.value))}
+                                            style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '1rem', fontSize: '1.25rem', color: 'white', fontWeight: 700 }}
+                                        />
+                                    </div>
+
+                                    {/* Try Luck Button */}
+                                    <button 
+                                        onClick={handlePlayJackpot}
+                                        disabled={isPlayingJackpot || isJackpotRolling || !anchorWallet || pollBalance < jackpotBet}
+                                        className="btn btn-primary"
+                                        style={{ 
+                                            padding: '1.25rem', 
+                                            fontSize: '1.1rem', 
+                                            fontWeight: 800, 
+                                            marginTop: '1rem',
+                                            backgroundColor: '#ef4444',
+                                            color: 'white',
+                                            boxShadow: '0 4px 14px 0 rgba(239, 68, 68, 0.39)',
+                                            border: 'none',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '1px'
+                                        }}
+                                    >
+                                        {isPlayingJackpot ? 'PROCESSING...' : `Try Your Luck (${jackpotBet} ${tokenSymbol})`}
+                                    </button>
+                                </div>
+
+                                {/* GAME STATUS & RESULT VISUALIZER */}
+                                <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', border: '2px solid rgba(255,255,255,0.05)' }}>
+                                    
+                                    {isJackpotRolling ? (
+                                        <div style={{ textAlign: 'center', width: '100%' }}>
+                                            <div style={{ overflow: 'hidden', height: '120px', background: '#000', borderRadius: '12px', border: '3px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                                                <div style={{ position: 'absolute', width: '100%', height: '100%', background: 'linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,1) 100%)', zIndex: 10 }}></div>
+                                                <div className="jackpot-roll" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', fontSize: '4rem', fontWeight: 900, color: '#ef4444', textShadow: '0 0 20px rgba(239, 68, 68, 0.5)' }}>
+                                                    <div>?</div><div>7</div><div>{jackpotRange}</div><div>1</div><div>?</div>
+                                                </div>
+                                            </div>
+                                            <h3 className="animate-pulse" style={{ marginTop: '1.5rem', color: '#ef4444', letterSpacing: '0.1em' }}>ROLLING SYSTEM SEED...</h3>
+                                        </div>
+                                    ) : jackpotResult ? (
+                                        <div className="animate-fade-in" style={{ textAlign: 'center', width: '100%' }}>
+                                            <div style={{ 
+                                                width: '120px', height: '120px', borderRadius: '50%', margin: '0 auto 1.5rem auto',
+                                                backgroundColor: jackpotResult.win ? 'rgba(41, 209, 100, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                border: `4px solid ${jackpotResult.win ? 'var(--accent-green)' : '#ef4444'}`,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: jackpotResult.win ? '0 0 30px rgba(41, 209, 100, 0.3)' : '0 0 30px rgba(239, 68, 68, 0.3)'
+                                            }}>
+                                                {jackpotResult.win ? <Trophy size={50} color="var(--accent-green)" /> : <RotateCcw size={50} color="#ef4444" />}
+                                            </div>
+                                            <h2 style={{ fontSize: '2rem', fontWeight: 900, color: jackpotResult.win ? 'var(--accent-green)' : '#ef4444', textTransform: 'uppercase' }}>
+                                                {jackpotResult.win ? 'JACKPOT WINNER!' : 'YOU MISSED!'}
+                                            </h2>
+                                            
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem', background: '#111', padding: '1.5rem', borderRadius: '12px' }}>
+                                                <div>
+                                                    <div className="text-dim font-mono text-xs uppercase mb-1">Your Number</div>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{jackpotNumber}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-dim font-mono text-xs uppercase mb-1">System Rolled</div>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: jackpotResult.win ? 'var(--accent-green)' : '#ef4444' }}>{jackpotResult.generated}</div>
+                                                </div>
+                                            </div>
+
+                                            {jackpotResult.win && (
+                                                <div className="animate-fade-in" style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(41, 209, 100, 0.1)', borderRadius: '8px', border: '1px solid var(--accent-green-border)' }}>
+                                                    <div className="text-sm font-mono text-dim mb-1">PAYOUT RECEIVED</div>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-green)' }}>+{jackpotResult.reward} {tokenSymbol}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', opacity: 0.5 }}>
+                                            <Dices size={80} style={{ marginBottom: '1rem' }} />
+                                            <h3 style={{ fontSize: '1.25rem' }}>Awaiting Your Bet</h3>
+                                            <p className="text-dim text-sm" style={{ maxWidth: '250px', margin: '0.5rem auto 0' }}>Match the exact number the system rolls to win {jackpotRange}x your bet.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {activeTab === 'game' && (
                         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                             {/* GAME HEADER & JOIN BY ID */}
@@ -1558,186 +1841,181 @@ const UserApp = () => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
-                                {/* CREATE POOL SECTION */}
-                                <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Create New Pool</h3>
-                                    
-                                    <div>
-                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">Bet Amount ({tokenSymbol})</label>
-                                        <input 
-                                            type="number" 
-                                            value={betAmount}
-                                            onChange={(e) => setBetAmount(Number(e.target.value))}
-                                            style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '1rem', fontSize: '1.25rem', color: 'white', fontWeight: 700 }}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-dim font-mono text-xs uppercase mb-2 block">Select Side</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <button 
-                                                onClick={() => setUserChoice(0)}
-                                                style={{ 
-                                                    padding: '1.5rem', 
-                                                    borderRadius: '12px', 
-                                                    border: userChoice === 0 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
-                                                    backgroundColor: userChoice === 0 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
-                                                    color: userChoice === 0 ? 'white' : 'var(--text-dim)',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    fontWeight: 800
-                                                }}
-                                            >
-                                                HEADS
-                                            </button>
-                                            <button 
-                                                onClick={() => setUserChoice(1)}
-                                                style={{ 
-                                                    padding: '1.5rem', 
-                                                    borderRadius: '12px', 
-                                                    border: userChoice === 1 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
-                                                    backgroundColor: userChoice === 1 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
-                                                    color: userChoice === 1 ? 'white' : 'var(--text-dim)',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    fontWeight: 800
-                                                }}
-                                            >
-                                                TAILS
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <button 
-                                        onClick={handleCreateGamePool}
-                                        disabled={isCreatingPool || !anchorWallet || pollBalance < betAmount}
-                                        className="btn btn-primary"
-                                        style={{ padding: '1.25rem', fontSize: '1rem', fontWeight: 800, marginTop: '1rem' }}
-                                    >
-                                        {isCreatingPool ? 'CREATING...' : `CREATE POOL (${betAmount} ${tokenSymbol})`}
-                                    </button>
-                                </div>
-
-                                {/* ACTIVE POOLS SECTION */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.5rem' }}>
-                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Open Game Pools</h3>
-                                        <span className="text-dim font-mono text-xs">{gamePools.filter(g => g.account.status === 0).length} Available</span>
-                                    </div>
-                                    
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                                        {gamePools.filter(g => g.account.status === 0).length === 0 ? (
-                                            <div className="card" style={{ padding: '3rem', textAlign: 'center', borderStyle: 'dashed' }}>
-                                                <p className="text-dim text-sm italic">No open pools. Start one!</p>
-                                            </div>
-                                        ) : (
-                                            gamePools.filter(g => g.account.status === 0).map((g, i) => (
-                                                <div key={i} className="card animate-fade-in" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>GAME ID: #{g.account.poolId.toString()}</div>
-                                                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white' }}>{g.account.amount.toNumber() / (10 ** decimals)} {tokenSymbol}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-green)', fontWeight: 600 }}>Creator: {g.account.creator.toBase58().substring(0, 6)}...</div>
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                        <div style={{ textAlign: 'right', fontSize: '0.8rem' }}>
-                                                            <div className="text-dim">Opponent gets</div>
-                                                            <div style={{ color: '#f59e0b', fontWeight: 700 }}>{g.account.creatorChoice === 0 ? 'TAILS' : 'HEADS'}</div>
-                                                        </div>
-                                                        <button 
-                                                            disabled={isJoiningPool || (anchorWallet && g.account.creator.equals(anchorWallet.publicKey))}
-                                                            onClick={() => handleJoinGamePool(g)}
-                                                            className="btn btn-secondary"
-                                                            style={{ 
-                                                                padding: '0.75rem 1.25rem', 
-                                                                fontSize: '0.8rem', 
-                                                                backgroundColor: anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? '#111' : 'var(--accent-green-dim)',
-                                                                border: '1px solid var(--accent-green-border)'
-                                                            }}
-                                                        >
-                                                            {anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? 'OWN POOL' : 'JOIN & FLIP'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* FLIP ANIMATION OVERLAY */}
-                            {(isFlipping || lastGameResult) && (
-                                <div style={{
-                                    position: 'fixed',
-                                    inset: 0,
-                                    backgroundColor: 'rgba(0,0,0,0.9)',
-                                    zIndex: 2000,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backdropFilter: 'blur(10px)',
-                                    animation: 'fadeIn 0.3s ease'
-                                }}>
+                            {(isFlipping || lastGameResult) ? (
+                                <div className="card glass-panel rainbow-glow animate-fade-in" style={{ padding: '3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', border: '2px solid rgba(245, 158, 11, 0.2)', minHeight: '500px' }}>
                                     {isFlipping ? (
                                         <div style={{ textAlign: 'center' }}>
                                             <div className="coin-spin" style={{
-                                                width: '120px',
-                                                height: '120px',
-                                                backgroundColor: '#f59e0b',
-                                                borderRadius: '50%',
-                                                border: '6px solid #b45309',
-                                                boxShadow: '0 0 50px rgba(245, 158, 11, 0.4)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: '3rem',
-                                                fontWeight: 900,
-                                                color: '#b45309',
-                                                marginBottom: '2rem'
+                                                width: '160px', height: '160px', backgroundColor: '#f59e0b', borderRadius: '50%', border: '8px solid #b45309',
+                                                boxShadow: '0 0 60px rgba(245, 158, 11, 0.6), inset 0 0 30px rgba(255, 255, 255, 0.3)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5rem', fontWeight: 900, color: '#b45309', marginBottom: '2.5rem', marginInline: 'auto'
                                             }}>
                                                 $
                                             </div>
-                                            <h2 className="animate-pulse" style={{ fontSize: '2rem', fontWeight: 800 }}>FLIPPING...</h2>
-                                            <p className="font-mono text-dim mt-2">// Good Luck!</p>
+                                            <h2 className="animate-pulse" style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f59e0b', letterSpacing: '0.15em' }}>FLIPPING...</h2>
+                                            <p className="font-mono text-dim mt-3 text-sm uppercase tracking-wide">// May the odds be in your favor</p>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in" style={{ textAlign: 'center', transform: 'scale(1.2)' }}>
+                                        <div className="animate-fade-in" style={{ textAlign: 'center', width: '100%', maxWidth: '600px' }}>
                                             <div style={{
-                                                width: '100px',
-                                                height: '100px',
-                                                borderRadius: '50%',
-                                                backgroundColor: lastGameResult.win ? 'var(--accent-green)' : '#ef4444',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: '2.5rem',
-                                                marginBottom: '1.5rem',
-                                                marginInline: 'auto',
-                                                boxShadow: lastGameResult.win ? '0 0 40px var(--accent-green-dim)' : '0 0 40px rgba(239, 68, 68, 0.2)'
+                                                width: '130px', height: '130px', borderRadius: '50%', margin: '0 auto 1.5rem auto',
+                                                backgroundColor: lastGameResult.win ? 'rgba(41, 209, 100, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                border: `4px solid ${lastGameResult.win ? 'var(--accent-green)' : '#ef4444'}`,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: lastGameResult.win ? '0 0 50px rgba(41, 209, 100, 0.4)' : '0 0 50px rgba(239, 68, 68, 0.4)'
                                             }}>
-                                                {lastGameResult.win ? '🏆' : '💀'}
+                                                {lastGameResult.win ? <Trophy size={65} color="var(--accent-green)" /> : <RotateCcw size={65} color="#ef4444" />}
                                             </div>
-                                            <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: lastGameResult.win ? 'var(--accent-green)' : '#ef4444' }}>
+                                            <h2 style={{ fontSize: '3.5rem', fontWeight: 900, color: lastGameResult.win ? 'var(--accent-green)' : '#ef4444', textTransform: 'uppercase', textShadow: lastGameResult.win ? '0 0 20px rgba(41, 209, 100, 0.3)' : '0 0 20px rgba(239, 68, 68, 0.3)', margin: '1rem 0' }}>
                                                 {lastGameResult.win ? 'YOU WON!' : 'YOU LOST!'}
                                             </h2>
-                                            <p style={{ fontSize: '1.25rem', marginTop: '1rem', fontWeight: 600 }}>
-                                                Result: <span style={{ color: '#f59e0b' }}>{lastGameResult.result === 0 ? 'HEADS' : 'TAILS'}</span>
-                                            </p>
+                                            
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginTop: '2rem', background: '#111', padding: '1.5rem', borderRadius: '12px', border: '1px solid #222' }}>
+                                                <div>
+                                                    <div className="text-dim font-mono text-sm uppercase mb-1">Coin Landed On</div>
+                                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f59e0b', letterSpacing: '2px' }}>{lastGameResult.result === 0 ? 'HEADS' : 'TAILS'}</div>
+                                                </div>
+                                            </div>
+
                                             {lastGameResult.win && (
-                                                <div style={{ fontSize: '1.25rem', marginTop: '0.5rem', color: 'var(--accent-green)' }}>
-                                                    + {lastGameResult.reward.toFixed(2)} {tokenSymbol}
+                                                <div className="animate-fade-in" style={{ marginTop: '1.5rem', padding: '1.5rem', background: 'rgba(41, 209, 100, 0.1)', borderRadius: '12px', border: '1px solid var(--accent-green-border)' }}>
+                                                    <div className="text-sm font-mono text-dim mb-1">REWARD RECEIVED</div>
+                                                    <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-green)' }}>+{lastGameResult.reward.toFixed(2)} {tokenSymbol}</div>
                                                 </div>
                                             )}
+                                            
                                             <button 
                                                 onClick={() => setLastGameResult(null)}
-                                                className="btn btn-secondary"
-                                                style={{ marginTop: '2.5rem', padding: '0.75rem 3rem' }}
+                                                className="btn btn-primary"
+                                                style={{ marginTop: '3rem', padding: '1.25rem 4rem', fontSize: '1.2rem', fontWeight: 800, backgroundColor: '#f59e0b', color: '#000', border: 'none', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)' }}
                                             >
-                                                CLOSE
+                                                BACK TO LOBBY
                                             </button>
                                         </div>
                                     )}
+                                </div>
+                            ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
+                                    {/* CREATE POOL SECTION */}
+                                    <div className="card glass-panel" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, borderBottom: '1px solid var(--card-border)', paddingBottom: '1rem', margin: 0 }}>Create New Table</h3>
+                                        
+                                        <div>
+                                            <label className="text-dim font-mono text-xs uppercase mb-2 block">Bet Amount ({tokenSymbol})</label>
+                                            <input 
+                                                type="number" 
+                                                value={betAmount}
+                                                onChange={(e) => setBetAmount(Number(e.target.value))}
+                                                style={{ width: '100%', backgroundColor: '#0a0a0a', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '1.25rem', fontSize: '1.5rem', color: 'white', fontWeight: 800 }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-dim font-mono text-xs uppercase mb-2 block">Select Winning Side</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                <button 
+                                                    onClick={() => setUserChoice(0)}
+                                                    style={{ 
+                                                        padding: '1.5rem', 
+                                                        borderRadius: '12px', 
+                                                        border: userChoice === 0 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
+                                                        backgroundColor: userChoice === 0 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
+                                                        color: userChoice === 0 ? 'white' : 'var(--text-dim)',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: 900,
+                                                        fontSize: '1.1rem'
+                                                    }}
+                                                >
+                                                    HEADS
+                                                </button>
+                                                <button 
+                                                    onClick={() => setUserChoice(1)}
+                                                    style={{ 
+                                                        padding: '1.5rem', 
+                                                        borderRadius: '12px', 
+                                                        border: userChoice === 1 ? '2px solid #f59e0b' : '1px solid var(--card-border)',
+                                                        backgroundColor: userChoice === 1 ? 'rgba(245, 158, 11, 0.1)' : '#0a0a0a',
+                                                        color: userChoice === 1 ? 'white' : 'var(--text-dim)',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: 900,
+                                                        fontSize: '1.1rem'
+                                                    }}
+                                                >
+                                                    TAILS
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={handleCreateGamePool}
+                                            disabled={isCreatingPool || !anchorWallet || pollBalance < betAmount}
+                                            className="btn btn-primary"
+                                            style={{ 
+                                                padding: '1.5rem', 
+                                                fontSize: '1.1rem', 
+                                                fontWeight: 800, 
+                                                marginTop: '1rem',
+                                                backgroundColor: '#f59e0b',
+                                                border: 'none',
+                                                color: '#000',
+                                                boxShadow: '0 4px 15px rgba(245, 158, 11, 0.2)'
+                                            }}
+                                        >
+                                            {isCreatingPool ? 'CREATING...' : `CREATE TABLE (${betAmount} ${tokenSymbol})`}
+                                        </button>
+                                    </div>
+
+                                    {/* ACTIVE POOLS SECTION */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid var(--card-border)' }}>
+                                            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>High Rollers Lobby</h3>
+                                            <div className="badge" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                                                {gamePools.filter(g => g.account.status === 0).length} LIVE
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '550px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                            {gamePools.filter(g => g.account.status === 0).length === 0 ? (
+                                                <div className="card glass-panel" style={{ padding: '4rem', textAlign: 'center', borderStyle: 'dashed', borderColor: '#333' }}>
+                                                    <p className="text-dim text-sm italic font-mono">The casino floor is empty. Create a table!</p>
+                                                </div>
+                                            ) : (
+                                                gamePools.filter(g => g.account.status === 0).map((g, i) => (
+                                                    <div key={i} className="card animate-fade-in glass-panel" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #f59e0b' }}>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: '0.25rem' }}>GAME ID: #{g.account.poolId.toString()}</div>
+                                                            <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'white' }}>{g.account.amount.toNumber() / (10 ** decimals)} {tokenSymbol}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: 'var(--accent-green)', fontWeight: 600, marginTop: '0.25rem' }}>Host: {g.account.creator.toBase58().substring(0, 6)}...</div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                                            <div style={{ textAlign: 'right', fontSize: '0.85rem' }}>
+                                                                <div className="text-dim uppercase font-mono text-xs">If you join, host picks</div>
+                                                                <div style={{ color: '#f59e0b', fontWeight: 800, fontSize: '1.1rem' }}>{g.account.creatorChoice === 0 ? 'HEADS' : 'TAILS'}</div>
+                                                            </div>
+                                                            <button 
+                                                                disabled={isJoiningPool || (anchorWallet && g.account.creator.equals(anchorWallet.publicKey))}
+                                                                onClick={() => handleJoinGamePool(g)}
+                                                                className="btn btn-secondary"
+                                                                style={{ 
+                                                                    padding: '0.8rem 1.5rem', 
+                                                                    fontSize: '0.85rem', 
+                                                                    fontWeight: 800,
+                                                                    backgroundColor: anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? '#111' : '#f59e0b',
+                                                                    color: anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? '#666' : '#000',
+                                                                    border: 'none',
+                                                                    boxShadow: anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? 'none' : '0 4px 10px rgba(245, 158, 11, 0.3)'
+                                                                }}
+                                                            >
+                                                                {anchorWallet && g.account.creator.equals(anchorWallet.publicKey) ? 'YOUR TABLE' : 'JOIN & MATCH'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>

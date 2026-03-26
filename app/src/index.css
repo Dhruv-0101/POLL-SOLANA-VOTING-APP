@@ -192,3 +192,35 @@ a {
   animation: coinFlip 0.8s ease-in-out infinite;
   transform-style: preserve-3d;
 }
+
+/* Jackpot Animations */
+@keyframes slotSpin {
+  0% { transform: translateY(0); filter: blur(0px); }
+  10% { transform: translateY(-50px); filter: blur(2px); }
+  50% { transform: translateY(-300px); filter: blur(4px); }
+  90% { transform: translateY(-50px); filter: blur(1px); }
+  100% { transform: translateY(0); filter: blur(0px); }
+}
+
+.jackpot-roll {
+  animation: slotSpin 0.3s cubic-bezier(0.1, 0.7, 0.1, 1) infinite;
+}
+
+@keyframes rainbowGlow {
+  0% { box-shadow: 0 0 20px #ff0000, inset 0 0 20px #ff0000; border-color: #ff0000; }
+  33% { box-shadow: 0 0 20px #00ff00, inset 0 0 20px #00ff00; border-color: #00ff00; }
+  66% { box-shadow: 0 0 20px #0000ff, inset 0 0 20px #0000ff; border-color: #0000ff; }
+  100% { box-shadow: 0 0 20px #ff0000, inset 0 0 20px #ff0000; border-color: #ff0000; }
+}
+
+.rainbow-glow {
+  animation: rainbowGlow 2s linear infinite;
+}
+
+.glass-panel {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}

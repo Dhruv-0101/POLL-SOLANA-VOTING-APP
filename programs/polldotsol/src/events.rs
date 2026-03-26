@@ -261,3 +261,28 @@ pub struct GameResolved {
     /// Admin ko kitni fee gayi (Treasury fee)
     pub fee: u64,
 }
+
+// ============================================================================
+// JACKPOT GAME EVENTS (Exact Match Jackpot)
+// ============================================================================
+
+/// Jab koi user jackpot game khelta hai — result immediately resolve hota hai.
+#[event]
+pub struct JackpotPlayed {
+    /// Unique game ID
+    pub game_id: u64,
+    /// Player ka wallet
+    pub player: Pubkey,
+    /// Player ne kitne tokens bet kiye
+    pub bet_amount: u64,
+    /// Range ki upper limit (lower hamesha 1)
+    pub range_max: u64,
+    /// Player ka chosen number
+    pub chosen_number: u64,
+    /// System ka randomly generated number
+    pub generated_number: u64,
+    /// Kya player jeet gaya
+    pub is_win: bool,
+    /// Win hone pe kitne tokens mile (0 if loss)
+    pub payout: u64,
+}

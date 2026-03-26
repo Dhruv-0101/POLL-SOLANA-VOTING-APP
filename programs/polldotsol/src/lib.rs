@@ -47,7 +47,7 @@ use events::*; // Sare events import (* = sab kuch) // Sare contexts import
 // `anchor init` ke time generate hota hai.
 // Har program ka ek unique ID hota hai Solana pe.
 // ============================================================================
-declare_id!("GuEoAC4UQV37E7fuogaSUpxfVGebb1xerv64Zj9Cbg1o");
+declare_id!("GofaqNwMJYvCJHVvPhf9ndRnmxsKSScjQQjRLCvR5oes");
 
 // ============================================================================
 // #[program] MACRO
@@ -1401,6 +1401,224 @@ pub mod polldotsol {
             result,
             total_pool,
             fee: 0,
+        });
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // INSTRUCTION 13: PLAY JACKPOT (Exact Match Jackpot)
+    // ========================================================================
+    // User ek single-player game khelta hai system ke against.
+    //
+    // Flow:
+    // 1. Validate inputs: range_max (2-1000), chosen_number (1-range_max), bet > 0
+    // 2. Check: Treasury me enough tokens hain payout ke liye (bet * range_max)?
+    // 3. Transfer bet tokens: Player → Jackpot Escrow (lock hote hain)
+    // 4. Generate random number: (slot XOR timestamp) % range_max + 1
+    // 5. Compare: chosen_number == generated_number?
+    //    WIN:
+    //      a. Escrow → Treasury (bet tokens)
+    //      b. Treasury → Player (payout = bet * range_max)
+    //    LOSS:
+    //      a. Escrow → Treasury (bet tokens — direct loss)
+    // 6. Save game state, increment counter, emit event
+    //
+    // Parameters:
+    // - bet_amount: Tokens to bet (smallest units)
+    // - range_max: Upper limit of range (2 to 1000)
+    // - chosen_number: Player's guess (1 to range_max inclusive)
+    // ========================================================================
+    pub fn play_jackpot(
+        ctx: Context<PlayJackpot>,
+        bet_amount: u64,
+        range_max: u64,
+        chosen_number: u64,
+    ) -> Result<()> {
+        // -------------------------------------------------------------------
+        // Input Validation
+        // -------------------------------------------------------------------
+        require!(bet_amount > 0, PollError::InvalidBetAmount);
+        // Range minimum 2 (taaki kam se kam 2 numbers hon), max 1000
+        require!(
+            range_max >= 2 && range_max <= 1000,
+            PollError::InvalidJackpotRange
+        );
+        // Chosen number range ke andar hona chahiye (1 se range_max tak, inclusive)
+        require!(
+            chosen_number >= 1 && chosen_number <= range_max,
+            PollError::InvalidChosenNumber
+        );
+
+        // -------------------------------------------------------------------
+        // Payout amount calculate karte hain: bet * range_max
+        // Agar range 1-5 hai aur bet 10 tokens → payout = 50 tokens
+        // -------------------------------------------------------------------
+        let payout = bet_amount
+            .checked_mul(range_max)
+            .ok_or(PollError::ArithmeticOverflow)?;
+
+        // -------------------------------------------------------------------
+        // Check: Treasury me enough tokens hain payout ke liye?
+        // Yeh check pehle karte hain escrow lock se, taaki user fail na ho
+        // -------------------------------------------------------------------
+        require!(
+            ctx.accounts.treasury_token_account.amount >= payout,
+            PollError::InsufficientTreasuryForJackpot
+        );
+
+        // -------------------------------------------------------------------
+        // Step 1: Bet tokens lock karo — Player → Jackpot Escrow
+        // User apni bet de raha hai, toh user ka signature chahiye.
+        // CpiContext::new() use hoga (not new_with_signer).
+        // -------------------------------------------------------------------
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.player_token_account.to_account_info(),
+                    to: ctx.accounts.jackpot_escrow.to_account_info(),
+                    authority: ctx.accounts.player.to_account_info(),
+                },
+            ),
+            bet_amount,
+        )?;
+
+        // -------------------------------------------------------------------
+        // Step 2: Random Number Generate karo
+        // Solana me true randomness nahi hoti. Hum slot aur timestamp ko
+        // XOR karke ek pseudo-random number generate karte hain.
+        // Yeh production VRF (Switchboard/Chainlink) se better nahi hai,
+        // but devnet aur demo purposes ke liye sufficient hai.
+        //
+        // Formula: generated = (slot XOR unix_timestamp) % range_max + 1
+        // Result range: [1, range_max] (inclusive)
+        // -------------------------------------------------------------------
+        let clock = Clock::get()?;
+        let random_seed = clock.slot ^ (clock.unix_timestamp as u64);
+        let generated_number = (random_seed % range_max) + 1; // 1-indexed
+
+        // -------------------------------------------------------------------
+        // Step 3: Win ya Loss decide karo
+        // -------------------------------------------------------------------
+        let is_win = chosen_number == generated_number;
+
+        // -------------------------------------------------------------------
+        // JackpotGame PDA ke signer seeds prepare karo.
+        // Escrow ki authority jackpot_game PDA hai.
+        // Toh escrow se tokens nikalne ke liye jackpot_game sign karega.
+        // -------------------------------------------------------------------
+        let jackpot_counter = &ctx.accounts.jackpot_counter;
+        let treasury_key = ctx.accounts.treasury.key();
+        let game_id = jackpot_counter.count;
+        let game_id_bytes = game_id.to_le_bytes();
+
+        // jackpot_game PDA seeds: ["jackpot_game", treasury, game_id_le_bytes]
+        let jackpot_game_bump = ctx.bumps.jackpot_game;
+        let game_signer_seeds: &[&[&[u8]]] = &[&[
+            b"jackpot_game",
+            treasury_key.as_ref(),
+            game_id_bytes.as_ref(),
+            &[jackpot_game_bump],
+        ]];
+
+        // -------------------------------------------------------------------
+        // Treasury PDA ke signer seeds — treasury se tokens transfer ke liye.
+        // -------------------------------------------------------------------
+        let admin_key = ctx.accounts.treasury.admin;
+        let treasury_bump = ctx.bumps.treasury;
+        let treasury_signer_seeds: &[&[&[u8]]] =
+            &[&[b"treasury", admin_key.as_ref(), &[treasury_bump]]];
+
+        // -------------------------------------------------------------------
+        // Step 4a: Escrow → Treasury (Bet tokens hamesha treasury ko jaate hain)
+        // Chahe win ho ya loss, escrow me jo tokens hain woh treasury ko jaate hain.
+        // -------------------------------------------------------------------
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.jackpot_escrow.to_account_info(),
+                    to: ctx.accounts.treasury_token_account.to_account_info(),
+                    authority: ctx.accounts.jackpot_game.to_account_info(),
+                },
+                game_signer_seeds,
+            ),
+            bet_amount,
+        )?;
+
+        // -------------------------------------------------------------------
+        // Step 4b (Win only): Treasury → Player (Payout = bet * range_max)
+        // Sirf win hone pe treasury se user ko payout milta hai.
+        // -------------------------------------------------------------------
+        let actual_payout = if is_win {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    token::Transfer {
+                        from: ctx.accounts.treasury_token_account.to_account_info(),
+                        to: ctx.accounts.player_token_account.to_account_info(),
+                        authority: ctx.accounts.treasury.to_account_info(),
+                    },
+                    treasury_signer_seeds,
+                ),
+                payout,
+            )?;
+            payout
+        } else {
+            0
+        };
+
+        // -------------------------------------------------------------------
+        // Buy/Sell Simulate Tokenomics Logic
+        // -------------------------------------------------------------------
+        if is_win {
+            // WIN EVENT = Simulated BUY (Demand Increases)
+            // User net profit nikal kar usko tokens_sold me add kar dete hain.
+            let net_profit = payout.saturating_sub(bet_amount);
+            ctx.accounts.treasury.tokens_sold =
+                ctx.accounts.treasury.tokens_sold.saturating_add(net_profit);
+        } else {
+            // LOSS EVENT = Simulated REDEEM/SELL (Supply returning to House)
+            // Tokens treasury me wapas aaye, yani circulating supply decrease hui.
+            ctx.accounts.treasury.tokens_sold =
+                ctx.accounts.treasury.tokens_sold.saturating_sub(bet_amount);
+        }
+
+        // -------------------------------------------------------------------
+        // Game state save karte hain.
+        // -------------------------------------------------------------------
+        let jackpot_game = &mut ctx.accounts.jackpot_game;
+        jackpot_game.player = ctx.accounts.player.key();
+        jackpot_game.bet_amount = bet_amount;
+        jackpot_game.range_max = range_max;
+        jackpot_game.chosen_number = chosen_number;
+        jackpot_game.generated_number = generated_number;
+        jackpot_game.is_win = is_win;
+        jackpot_game.game_id = game_id;
+        jackpot_game.bump = jackpot_game_bump;
+
+        // -------------------------------------------------------------------
+        // Counter increment karte hain next game ke liye.
+        // -------------------------------------------------------------------
+        let counter = &mut ctx.accounts.jackpot_counter;
+        counter.count = counter
+            .count
+            .checked_add(1)
+            .ok_or(PollError::ArithmeticOverflow)?;
+
+        // -------------------------------------------------------------------
+        // JackpotPlayed event emit karte hain.
+        // -------------------------------------------------------------------
+        emit!(JackpotPlayed {
+            game_id,
+            player: ctx.accounts.player.key(),
+            bet_amount,
+            range_max,
+            chosen_number,
+            generated_number,
+            is_win,
+            payout: actual_payout,
         });
 
         Ok(())

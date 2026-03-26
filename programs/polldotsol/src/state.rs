@@ -271,3 +271,43 @@ pub struct GamePool {
     /// PDA ka bump seed.
     pub bump: u8, // 1
 }
+
+// ============================================================================
+// JACKPOT GAME STATE
+// ============================================================================
+// JackpotGame 'Exact Match Jackpot' game ka state store karta hai.
+// Yeh ek play-against-system game hai:
+// - User ek range define karta hai (1 to N, max N=1000)
+// - User apna bet aur ek number choose karta hai
+// - System usi range me random number generate karta hai
+// - Agar match → user ko bet * N milta hai (treasury se)
+// - Agar miss → bet treasury ko chali jaati hai
+// ============================================================================
+#[account]
+#[derive(InitSpace)]
+pub struct JackpotGame {
+    /// Game khelne wale ka wallet address.
+    pub player: Pubkey, // 32
+
+    /// Player ka bet amount (smallest token units me).
+    pub bet_amount: u64, // 8
+
+    /// Range ki upper limit. Lower limit hamesha 1 hoti hai.
+    /// Valid range: 2 to 1000 (frontend validate karega).
+    pub range_max: u64, // 8
+
+    /// Player ne jo number choose kiya (1 to range_max ke beech).
+    pub chosen_number: u64, // 8
+
+    /// System ne jo random number generate kiya.
+    pub generated_number: u64, // 8
+
+    /// Kya player jeet gaya? true = win, false = loss.
+    pub is_win: bool, // 1
+
+    /// Unique Game ID — har game ka alag ID.
+    pub game_id: u64, // 8
+
+    /// PDA ka bump seed.
+    pub bump: u8, // 1
+}

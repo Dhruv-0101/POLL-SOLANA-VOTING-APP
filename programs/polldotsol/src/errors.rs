@@ -203,4 +203,19 @@ pub enum PollError {
     /// Bet amount zero nahi ho sakta.
     #[msg("Bet amount must be greater than zero")]
     InvalidBetAmount,
+
+    // =========================================================================
+    // Jackpot Game Related Errors (Exact Match Jackpot)
+    // =========================================================================
+    /// Range maximum 1000 se zyada nahi ho sakta.
+    #[msg("Range max must be between 2 and 1000")]
+    InvalidJackpotRange,
+
+    /// Chosen number range ke andar hona chahiye (1 to range_max).
+    #[msg("Chosen number must be between 1 and range_max (inclusive)")]
+    InvalidChosenNumber,
+
+    /// Treasury me win payout ke liye enough tokens nahi hain.
+    #[msg("Treasury has insufficient tokens to pay jackpot reward")]
+    InsufficientTreasuryForJackpot,
 }
