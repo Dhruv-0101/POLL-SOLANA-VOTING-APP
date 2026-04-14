@@ -15,7 +15,7 @@ function App() {
   const isLandingRoute = location.pathname === '/';
 
   // Set connection to Solana Devnet as requested by the user
-  const endpoint = "https://api.devnet.solana.com";
+  const endpoint = import.meta.env.VITE_RPC_URL || "https://api.devnet.solana.com";
   
   // Set up wallets (using standards from wallet-adapter)
   const wallets = useMemo(() => [], []);
