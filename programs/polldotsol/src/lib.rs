@@ -47,7 +47,7 @@ use events::*; // Sare events import (* = sab kuch) // Sare contexts import
 // `anchor init` ke time generate hota hai.
 // Har program ka ek unique ID hota hai Solana pe.
 // ============================================================================
-declare_id!("HJWQC5B65EqR8YmXEXdVWP58gH3p9B5L6PRM9WvKvBpc");
+declare_id!("5vvzyK6pf72aMKzpucUuS35yM9r7LaizWWcpL8mYuoDf");
 
 // ============================================================================
 // #[program] MACRO
